@@ -1,18 +1,16 @@
 'use client';
 
 import { useCallback, useEffect, useMemo, useRef } from 'react';
-import {
-  Map as MapView,
-  Source,
-  Layer,
-  NavigationControl,
-} from '@vis.gl/react-maplibre';
+import { Map as MapView, NavigationControl } from '@vis.gl/react-maplibre';
 import 'maplibre-gl/dist/maplibre-gl.css';
-import { colorForStatus, buildGeometryIndex } from '@/lib/map/alert-engine';
+import { buildStaticCityGeoJSON, statusCode } from '@/lib/map/alert-engine';
 import { cn } from '@/lib/utils';
 
 const MAP_STYLE = 'https://tiles.openfreemap.org/styles/liberty';
 const INITIAL_VIEW = { longitude: 34.9, latitude: 31.5, zoom: 7 };
+
+const POLY_SOURCE = 'city-polygons';
+const POINT_SOURCE = 'city-points';
 
 const RTL_PLUGIN = {
   pluginUrl:
@@ -20,7 +18,58 @@ const RTL_PLUGIN = {
   lazy: true,
 };
 
-const THROTTLE_MS = 80;
+const FILL_COLOR_EXPR = [
+  'match',
+  ['number', ['feature-state', 's'], 0],
+  1,
+  '#ef4444',
+  2,
+  '#f59e0b',
+  3,
+  '#22c55e',
+  'rgba(0,0,0,0)',
+];
+
+const FILL_OPACITY_EXPR = [
+  'case',
+  ['>', ['number', ['feature-state', 's'], 0], 0],
+  0.3,
+  0,
+];
+
+const LINE_COLOR_EXPR = FILL_COLOR_EXPR;
+
+const LINE_OPACITY_EXPR = [
+  'case',
+  ['>', ['number', ['feature-state', 's'], 0], 0],
+  1,
+  0,
+];
+
+const LINE_WIDTH_EXPR = [
+  'case',
+  ['>', ['number', ['feature-state', 's'], 0], 0],
+  2,
+  0,
+];
+
+const LABEL_OPACITY_EXPR = [
+  'case',
+  ['>', ['number', ['feature-state', 's'], 0], 0],
+  1,
+  0,
+];
+
+const CIRCLE_COLOR_EXPR = FILL_COLOR_EXPR;
+
+const CIRCLE_OPACITY_EXPR = [
+  'case',
+  ['>', ['number', ['feature-state', 's'], 0], 0],
+  1,
+  0,
+];
+
+const CIRCLE_STROKE_OPACITY_EXPR = CIRCLE_OPACITY_EXPR;
 
 function switchLabelsToHebrew(map) {
   const hebrewField = ['coalesce', ['get', 'name:he'], ['get', 'name']];
@@ -37,135 +86,189 @@ function switchLabelsToHebrew(map) {
   }
 }
 
-export default function MapCanvas({ cityCache, snapshot, events, className }) {
+export default function MapCanvas({
+  cityCache,
+  snapshot,
+  autoFocus = true,
+  className,
+}) {
   const mapRef = useRef(null);
-  const lastPushRef = useRef(0);
-  const pendingRef = useRef(null);
-  const rafRef = useRef(null);
-  const prevFingerprintRef = useRef('');
+  const sourcesReadyRef = useRef(false);
+  const prevActiveRef = useRef(new Set());
+  const prevFitRef = useRef('');
+  const fitTimer = useRef(null);
+  const prevAutoFocusRef = useRef(autoFocus);
 
-  const geometryIndex = useMemo(() => {
-    if (!events || !cityCache) return cityCache; // fall back to full cache
-    return buildGeometryIndex(events, cityCache);
-  }, [events, cityCache]);
+  const staticGeoJSON = useMemo(() => {
+    return buildStaticCityGeoJSON(cityCache);
+  }, [cityCache]);
+
+  const setupSources = useCallback(
+    (map) => {
+      if (map.getSource(POLY_SOURCE)) return;
+
+      map.addSource(POLY_SOURCE, {
+        type: 'geojson',
+        data: staticGeoJSON.polygons,
+        promoteId: 'name',
+      });
+
+      map.addSource(POINT_SOURCE, {
+        type: 'geojson',
+        data: staticGeoJSON.points,
+        promoteId: 'name',
+      });
+
+      map.addLayer({
+        id: 'alert-poly-fill',
+        source: POLY_SOURCE,
+        type: 'fill',
+        paint: {
+          'fill-color': FILL_COLOR_EXPR,
+          'fill-opacity': FILL_OPACITY_EXPR,
+        },
+      });
+
+      map.addLayer({
+        id: 'alert-poly-border',
+        source: POLY_SOURCE,
+        type: 'line',
+        paint: {
+          'line-color': LINE_COLOR_EXPR,
+          'line-opacity': LINE_OPACITY_EXPR,
+          'line-width': LINE_WIDTH_EXPR,
+        },
+      });
+
+      map.addLayer({
+        id: 'alert-poly-label',
+        source: POLY_SOURCE,
+        type: 'symbol',
+        layout: {
+          'text-field': ['get', 'name'],
+          'text-font': ['Noto Sans Regular'],
+          'text-size': 12,
+          'text-anchor': 'center',
+          'text-allow-overlap': false,
+          'text-max-width': 8,
+        },
+        paint: {
+          'text-color': '#fff',
+          'text-halo-color': 'rgba(0,0,0,0.8)',
+          'text-halo-width': 1.5,
+          'text-opacity': LABEL_OPACITY_EXPR,
+        },
+      });
+
+      map.addLayer({
+        id: 'alert-point-circle',
+        source: POINT_SOURCE,
+        type: 'circle',
+        paint: {
+          'circle-radius': 6,
+          'circle-color': CIRCLE_COLOR_EXPR,
+          'circle-opacity': CIRCLE_OPACITY_EXPR,
+          'circle-stroke-color': 'rgba(255,255,255,0.8)',
+          'circle-stroke-width': 2,
+          'circle-stroke-opacity': CIRCLE_STROKE_OPACITY_EXPR,
+        },
+      });
+
+      map.addLayer({
+        id: 'alert-point-label',
+        source: POINT_SOURCE,
+        type: 'symbol',
+        layout: {
+          'text-field': ['get', 'name'],
+          'text-font': ['Noto Sans Regular'],
+          'text-size': 11,
+          'text-anchor': 'top',
+          'text-offset': [0, 0.8],
+          'text-allow-overlap': false,
+          'text-max-width': 8,
+        },
+        paint: {
+          'text-color': '#fff',
+          'text-halo-color': 'rgba(0,0,0,0.8)',
+          'text-halo-width': 1.5,
+          'text-opacity': LABEL_OPACITY_EXPR,
+        },
+      });
+
+      sourcesReadyRef.current = true;
+    },
+    [staticGeoJSON],
+  );
+
+  useEffect(() => {
+    const map = mapRef.current?.getMap();
+    if (!map || !sourcesReadyRef.current) return;
+
+    const polySrc = map.getSource(POLY_SOURCE);
+    if (polySrc) polySrc.setData(staticGeoJSON.polygons);
+
+    const ptSrc = map.getSource(POINT_SOURCE);
+    if (ptSrc) ptSrc.setData(staticGeoJSON.points);
+
+    prevActiveRef.current.clear();
+  }, [staticGeoJSON]);
 
   const handleLoad = useCallback(() => {
     const map = mapRef.current?.getMap();
-    if (map) switchLabelsToHebrew(map);
-  }, []);
-
-  const buildGeoJSON = useCallback(
-    (snap) => {
-      if (!snap || !geometryIndex)
-        return { polygonGeoJSON: emptyFC(), points: [] };
-
-      const polys = [];
-      const pts = [];
-
-      for (const [name, cs] of snap) {
-        if (cs.status === 'none') continue;
-
-        const city =
-          geometryIndex.get(name) ??
-          geometryIndex.get(String(cs.cityId)) ??
-          null;
-        if (!city) continue;
-
-        const color = colorForStatus(cs.status);
-        const coords = parsePolygon(city.polygon ?? city.polygons);
-
-        if (coords) {
-          polys.push({
-            type: 'Feature',
-            properties: { name, color, status: cs.status },
-            geometry: { type: 'Polygon', coordinates: [coords] },
-          });
-        } else if (city.lat != null && city.lng != null) {
-          pts.push({
-            type: 'Feature',
-            properties: { name, color },
-            geometry: {
-              type: 'Point',
-              coordinates: [Number(city.lng), Number(city.lat)],
-            },
-          });
-        }
-      }
-
-      return {
-        polygonGeoJSON: { type: 'FeatureCollection', features: polys },
-        points: { type: 'FeatureCollection', features: pts },
-      };
-    },
-    [geometryIndex],
-  );
-
-  const pushToMap = useCallback((polyFC, pointFC) => {
-    const map = mapRef.current?.getMap();
     if (!map) return;
-
-    const polySrc = map.getSource('alert-polygons');
-    if (polySrc) {
-      polySrc.setData(polyFC);
-    }
-
-    const ptSrc = map.getSource('alert-points');
-    if (ptSrc) {
-      ptSrc.setData(pointFC);
-    }
-  }, []);
-
-  const schedulePush = useCallback(
-    (polyFC, pointFC) => {
-      const now = performance.now();
-      const elapsed = now - lastPushRef.current;
-
-      if (elapsed >= THROTTLE_MS) {
-        lastPushRef.current = now;
-        pushToMap(polyFC, pointFC);
-      } else {
-        if (pendingRef.current) cancelAnimationFrame(pendingRef.current);
-        pendingRef.current = requestAnimationFrame(() => {
-          lastPushRef.current = performance.now();
-          pushToMap(polyFC, pointFC);
-          pendingRef.current = null;
-        });
-      }
-    },
-    [pushToMap],
-  );
+    switchLabelsToHebrew(map);
+    setupSources(map);
+    if (snapshot) applySnapshot(map, snapshot, prevActiveRef);
+  }, [setupSources, snapshot]);
 
   useEffect(() => {
-    const { polygonGeoJSON, points } = buildGeoJSON(snapshot);
-    schedulePush(polygonGeoJSON, points);
-  }, [snapshot, buildGeoJSON, schedulePush]);
+    const map = mapRef.current?.getMap();
+    if (!map || !sourcesReadyRef.current) return;
+    applySnapshot(map, snapshot, prevActiveRef);
+  }, [snapshot]);
 
   useEffect(() => {
-    if (!snapshot) return;
+    if (autoFocus && !prevAutoFocusRef.current) {
+      prevFitRef.current = '';
+    }
+    prevAutoFocusRef.current = autoFocus;
+  }, [autoFocus]);
+
+  useEffect(() => {
+    if (!autoFocus || !snapshot || !cityCache) return;
 
     const names = [];
     for (const [name, cs] of snapshot) {
-      if (cs.status !== 'none') names.push(name);
+      if (statusCode(cs.status) !== 0) names.push(name);
     }
     names.sort();
     const fingerprint = names.join('|');
 
-    if (!fingerprint || fingerprint === prevFingerprintRef.current) return;
-    prevFingerprintRef.current = fingerprint;
+    if (!fingerprint || fingerprint === prevFitRef.current) return;
+    prevFitRef.current = fingerprint;
 
-    const timer = setTimeout(() => {
-      const { polygonGeoJSON, points } = buildGeoJSON(snapshot);
+    fitTimer.current = setTimeout(() => {
       const map = mapRef.current?.getMap();
       if (!map) return;
 
       const coords = [];
-      for (const f of polygonGeoJSON.features) {
-        for (const ring of f.geometry.coordinates) {
-          for (const c of ring) coords.push(c);
+      for (const name of names) {
+        const city = cityCache.get(name);
+        if (!city) continue;
+        if (city.lat != null && city.lng != null) {
+          coords.push([Number(city.lng), Number(city.lat)]);
         }
-      }
-      for (const f of points.features) {
-        coords.push(f.geometry.coordinates);
+        const poly = city.polygon ?? city.polygons;
+        if (poly) {
+          const ring = Array.isArray(poly) ? poly : poly.coordinates?.[0];
+          if (Array.isArray(ring) && ring.length > 0) {
+            const [a, b] = ring[0];
+            const an = Number(a),
+              bn = Number(b);
+            const isLngLat = an >= 33 && an <= 38 && bn >= 27 && bn <= 35;
+            coords.push(isLngLat ? [an, bn] : [bn, an]);
+          }
+        }
       }
       if (coords.length === 0) return;
 
@@ -192,16 +295,8 @@ export default function MapCanvas({ cityCache, snapshot, events, className }) {
       );
     }, 200);
 
-    return () => clearTimeout(timer);
-  }, [snapshot, buildGeoJSON]);
-
-  useEffect(
-    () => () => {
-      if (pendingRef.current) cancelAnimationFrame(pendingRef.current);
-      if (rafRef.current) cancelAnimationFrame(rafRef.current);
-    },
-    [],
-  );
+    return () => clearTimeout(fitTimer.current);
+  }, [snapshot, cityCache, autoFocus]);
 
   return (
     <div className={cn('relative overflow-hidden', className)}>
@@ -215,116 +310,42 @@ export default function MapCanvas({ cityCache, snapshot, events, className }) {
         attributionControl={false}
       >
         <NavigationControl position="top-left" />
-
-        {/* Polygon source — always mounted, data pushed imperatively */}
-        <Source id="alert-polygons" type="geojson" data={emptyFC()}>
-          <Layer
-            id="alert-polygons-fill"
-            type="fill"
-            paint={{ 'fill-color': ['get', 'color'], 'fill-opacity': 0.3 }}
-          />
-          <Layer
-            id="alert-polygons-border"
-            type="line"
-            paint={{ 'line-color': ['get', 'color'], 'line-width': 2 }}
-          />
-          <Layer
-            id="alert-polygons-label"
-            type="symbol"
-            layout={{
-              'text-field': ['get', 'name'],
-              'text-font': ['Noto Sans Regular'],
-              'text-size': 12,
-              'text-anchor': 'center',
-              'text-allow-overlap': false,
-              'text-max-width': 8,
-            }}
-            paint={{
-              'text-color': '#fff',
-              'text-halo-color': 'rgba(0,0,0,0.8)',
-              'text-halo-width': 1.5,
-            }}
-          />
-        </Source>
-
-        {/* Point source — for cities without polygons */}
-        <Source id="alert-points" type="geojson" data={emptyFC()}>
-          <Layer
-            id="alert-points-circle"
-            type="circle"
-            paint={{
-              'circle-radius': 6,
-              'circle-color': ['get', 'color'],
-              'circle-stroke-color': 'rgba(255,255,255,0.8)',
-              'circle-stroke-width': 2,
-            }}
-          />
-          <Layer
-            id="alert-points-label"
-            type="symbol"
-            layout={{
-              'text-field': ['get', 'name'],
-              'text-font': ['Noto Sans Regular'],
-              'text-size': 11,
-              'text-anchor': 'top',
-              'text-offset': [0, 0.8],
-              'text-allow-overlap': false,
-              'text-max-width': 8,
-            }}
-            paint={{
-              'text-color': '#fff',
-              'text-halo-color': 'rgba(0,0,0,0.8)',
-              'text-halo-width': 1.5,
-            }}
-          />
-        </Source>
       </MapView>
     </div>
   );
 }
 
-function emptyFC() {
-  return { type: 'FeatureCollection', features: [] };
-}
+function applySnapshot(map, snapshot, prevActiveRef) {
+  const prevActive = prevActiveRef.current;
+  const nextActive = new Set();
 
-function parsePolygon(raw) {
-  if (!raw) return null;
+  if (snapshot) {
+    for (const [name, cs] of snapshot) {
+      if (cs.status === 'none') continue;
+      const code = statusCode(cs.status);
+      if (code === 0) continue;
 
-  if (
-    typeof raw === 'object' &&
-    !Array.isArray(raw) &&
-    raw.type === 'Polygon'
-  ) {
-    const ring = raw.coordinates?.[0];
-    if (!Array.isArray(ring) || ring.length < 3) return null;
-    return closeRing(ring.map(([lng, lat]) => [Number(lng), Number(lat)]));
+      nextActive.add(name);
+
+      trySetFeatureState(map, POLY_SOURCE, name, { s: code });
+      trySetFeatureState(map, POINT_SOURCE, name, { s: code });
+    }
   }
 
-  if (!Array.isArray(raw) || raw.length < 3) return null;
-  if (
-    !raw.every(
-      (p) =>
-        Array.isArray(p) &&
-        p.length >= 2 &&
-        p.every((v) => Number.isFinite(Number(v))),
-    )
-  ) {
-    return null;
+  for (const name of prevActive) {
+    if (!nextActive.has(name)) {
+      trySetFeatureState(map, POLY_SOURCE, name, { s: 0 });
+      trySetFeatureState(map, POINT_SOURCE, name, { s: 0 });
+    }
   }
 
-  const [a, b] = raw[0].map(Number);
-  const alreadyLngLat = a >= 33 && a <= 38 && b >= 27 && b <= 35;
-
-  const ring = alreadyLngLat
-    ? raw.map(([lng, lat]) => [Number(lng), Number(lat)])
-    : raw.map(([lat, lng]) => [Number(lng), Number(lat)]);
-
-  return closeRing(ring);
+  prevActiveRef.current = nextActive;
 }
 
-function closeRing(ring) {
-  const first = ring[0];
-  const last = ring[ring.length - 1];
-  if (first[0] !== last[0] || first[1] !== last[1]) ring.push([...first]);
-  return ring;
+function trySetFeatureState(map, source, id, state) {
+  try {
+    map.setFeatureState({ source, id }, state);
+  } catch {
+    // Feature might not exist in this source — that's fine
+  }
 }

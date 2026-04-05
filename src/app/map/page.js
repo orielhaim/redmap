@@ -1,8 +1,16 @@
 'use client';
 
 import { useEffect, useMemo, useCallback } from 'react';
-import { Map as MapIcon, Play, RefreshCw, Loader2, Database } from 'lucide-react';
+import {
+  Map as MapIcon,
+  Play,
+  RefreshCw,
+  Loader2,
+  Database,
+} from 'lucide-react';
 import { cn } from '@/lib/utils';
+import { Label } from '@/components/ui/label';
+import { Switch } from '@/components/ui/switch';
 import { useCityCache } from '@/hooks/use-city-cache';
 import { useTimelinePlayer } from '@/hooks/use-timeline-player';
 import { useMapStore, MODES, TIME_PRESETS } from '@/stores/map-store';
@@ -10,6 +18,11 @@ import { buildEventSnapshot } from '@/lib/map/alert-engine';
 import MapCanvas from '@/components/map/map-canvas';
 import HistorySidebar from '@/components/map/history-sidebar';
 import TimelineControls from '@/components/map/timeline-controls';
+import {
+  Sidebar,
+  SidebarInset,
+  SidebarProvider,
+} from '@/components/ui/sidebar';
 
 export default function MapPage() {
   const mode = useMapStore((s) => s.mode);
@@ -23,11 +36,18 @@ export default function MapPage() {
   const enterTimeline = useMapStore((s) => s.enterTimeline);
   const exitTimeline = useMapStore((s) => s.exitTimeline);
   const toggleSidebar = useMapStore((s) => s.toggleSidebar);
+  const setSidebarOpen = useMapStore((s) => s.setSidebarOpen);
   const selectPreset = useMapStore((s) => s.selectPreset);
   const setSelectedEventIndex = useMapStore((s) => s.setSelectedEventIndex);
-  const toggleSelectedEventIndex = useMapStore((s) => s.toggleSelectedEventIndex);
+  const toggleSelectedEventIndex = useMapStore(
+    (s) => s.toggleSelectedEventIndex,
+  );
   const fetchHistory = useMapStore((s) => s.fetchHistory);
   const setCityCache = useMapStore((s) => s.setCityCache);
+  const mapAutoFocusPreference = useMapStore((s) => s.mapAutoFocusPreference);
+  const setMapAutoFocusPreference = useMapStore(
+    (s) => s.setMapAutoFocusPreference,
+  );
 
   const {
     cityCache,
@@ -45,6 +65,14 @@ export default function MapPage() {
 
   const player = useTimelinePlayer(events);
 
+  const autoFocusSuppressedBySpeed =
+    mode === MODES.TIMELINE && player.speedMultiplier >= 2;
+
+  const mapAutoFocusActive = useMemo(
+    () => mapAutoFocusPreference && !autoFocusSuppressedBySpeed,
+    [mapAutoFocusPreference, autoFocusSuppressedBySpeed],
+  );
+
   const activeSnapshot = useMemo(() => {
     if (events.length === 0) return null;
 
@@ -56,7 +84,13 @@ export default function MapPage() {
     }
 
     return player.timelineSnapshot;
-  }, [events, mode, selectedEventIndex, player.timelineSnapshot, player.snapshotVersion]);
+  }, [
+    events,
+    mode,
+    selectedEventIndex,
+    player.timelineSnapshot,
+    player.snapshotVersion,
+  ]);
 
   const isLoading = cacheLoading || historyLoading;
 
@@ -88,11 +122,17 @@ export default function MapPage() {
     <div className="flex flex-col" style={{ height: 'calc(100vh - 3.5rem)' }}>
       <div className="flex items-center gap-2 px-3 py-2 border-b border-border bg-card/60 backdrop-blur-sm shrink-0 flex-wrap">
         <div className="flex items-center gap-0.5 rounded-lg border border-border bg-muted p-0.5">
-          <ModeButton active={mode === MODES.NORMAL} onClick={handleExitTimeline}>
+          <ModeButton
+            active={mode === MODES.NORMAL}
+            onClick={handleExitTimeline}
+          >
             <MapIcon size={13} />
             Normal
           </ModeButton>
-          <ModeButton active={mode === MODES.TIMELINE} onClick={handleEnterTimeline}>
+          <ModeButton
+            active={mode === MODES.TIMELINE}
+            onClick={handleEnterTimeline}
+          >
             <Play size={13} />
             Timeline
           </ModeButton>
@@ -116,6 +156,32 @@ export default function MapPage() {
               {p.label}
             </button>
           ))}
+        </div>
+
+        <div className="h-4 w-px bg-border" />
+
+        <div
+          className={cn(
+            'flex items-center gap-2',
+            autoFocusSuppressedBySpeed && 'opacity-60',
+          )}
+        >
+          <Label
+            htmlFor="map-auto-focus"
+            className={cn(
+              'text-xs font-normal text-muted-foreground',
+              autoFocusSuppressedBySpeed ? 'cursor-default' : 'cursor-pointer',
+            )}
+          >
+            Auto focus
+          </Label>
+          <Switch
+            id="map-auto-focus"
+            size="sm"
+            checked={mapAutoFocusActive}
+            disabled={autoFocusSuppressedBySpeed}
+            onCheckedChange={setMapAutoFocusPreference}
+          />
         </div>
 
         {isLoading && (
@@ -182,52 +248,63 @@ export default function MapPage() {
         </button>
       </div>
 
-      <div className="flex flex-1 overflow-hidden">
-        <div className="flex flex-col flex-1 min-w-0">
-          <MapCanvas
-            cityCache={cityCache}
-            snapshot={activeSnapshot}
-            events={events}
-            className="flex-1"
-          />
-
-          {mode === MODES.TIMELINE && (
-            <TimelineControls
-              events={events}
-              cursor={player.cursor}
-              playing={player.playing}
-              currentEvent={player.currentEvent}
-              speedMultiplier={player.speedMultiplier}
-              speedOptions={player.speedOptions}
-              onToggle={player.togglePlay}
-              onSeek={(idx) => {
-                player.seekTo(idx);
-                setSelectedEventIndex(null);
-              }}
-              onStepBack={player.stepBack}
-              onStepForward={player.stepForward}
-              onClose={handleExitTimeline}
-              onCycleSpeed={player.cycleSpeed}
-              onSetSpeed={player.setSpeed}
+      <SidebarProvider
+        open={sidebarOpen}
+        onOpenChange={setSidebarOpen}
+        className="flex min-h-0 flex-1 flex-col overflow-hidden"
+        style={{ '--sidebar-width': '20rem' }}
+      >
+        <div className="flex min-h-0 flex-1 overflow-hidden">
+          <SidebarInset className="min-h-0 min-w-0 flex flex-1 flex-col overflow-hidden">
+            <MapCanvas
+              cityCache={cityCache}
+              snapshot={activeSnapshot}
+              autoFocus={mapAutoFocusActive}
+              className="flex-1"
             />
-          )}
-        </div>
 
-        {sidebarOpen && (
-          <div className="shrink-0 w-80 border-l border-border overflow-hidden">
+            {mode === MODES.TIMELINE && (
+              <TimelineControls
+                events={events}
+                cursor={player.cursor}
+                playing={player.playing}
+                currentEvent={player.currentEvent}
+                speedMultiplier={player.speedMultiplier}
+                speedOptions={player.speedOptions}
+                onToggle={player.togglePlay}
+                onSeek={(idx) => {
+                  player.seekTo(idx);
+                  setSelectedEventIndex(null);
+                }}
+                onStepBack={player.stepBack}
+                onStepForward={player.stepForward}
+                onClose={handleExitTimeline}
+                onCycleSpeed={player.cycleSpeed}
+                onSetSpeed={player.setSpeed}
+              />
+            )}
+          </SidebarInset>
+
+          <Sidebar
+            side="right"
+            collapsible="none"
+            dir="rtl"
+            className={cn(!sidebarOpen && 'hidden')}
+          >
             <HistorySidebar
               events={events}
-              cursor={mode === MODES.TIMELINE ? player.cursor : selectedEventIndex}
+              cursor={
+                mode === MODES.TIMELINE ? player.cursor : selectedEventIndex
+              }
               playing={player.playing}
-              mode={mode}
               onSeek={handleSidebarSeek}
               loading={historyLoading}
               error={historyError}
               onRefetch={() => fetchHistory(true)}
             />
-          </div>
-        )}
-      </div>
+          </Sidebar>
+        </div>
+      </SidebarProvider>
     </div>
   );
 }

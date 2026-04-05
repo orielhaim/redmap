@@ -300,15 +300,14 @@ export default function TimelineControls({
             <SkipForward size={14} />
           </TransportBtn>
         </div>
+        {total > 0 && (
+          <div className="flex items-center justify-center gap-1 text-[10px] text-muted-foreground">
+            <span className="tabular-nums">
+              {cursor + 1} / {total}
+            </span>
+          </div>
+        )}
       </div>
-
-      {total > 0 && (
-        <div className="flex items-center justify-center gap-1 text-[10px] text-muted-foreground">
-          <span className="tabular-nums">
-            {cursor + 1} / {total}
-          </span>
-        </div>
-      )}
     </div>
   );
 }

@@ -3,6 +3,7 @@
 import { useEffect, useMemo, useRef } from 'react';
 import { format, parseISO } from 'date-fns';
 import { cn } from '@/lib/utils';
+import { SidebarContent, SidebarHeader } from '@/components/ui/sidebar';
 
 const TYPE_LABELS = {
   missiles: 'ירי רקטות וטילים',
@@ -42,13 +43,11 @@ export default function HistorySidebar({
   events,
   cursor,
   playing,
-  mode,
   onSeek,
   loading,
   error,
   onRefetch,
 }) {
-  const listRef = useRef(null);
   const itemRefs = useRef({});
 
   const displayEvents = useMemo(() => {
@@ -64,25 +63,25 @@ export default function HistorySidebar({
   }, [displayCursor, playing]);
 
   return (
-    <div className="flex flex-col h-full bg-card overflow-hidden">
-      <div className="flex items-center justify-between px-3 py-2.5 border-b border-border shrink-0">
-        <span className="text-xs font-semibold text-foreground uppercase tracking-wider">
+    <>
+      <SidebarHeader className="flex-row items-center justify-between border-b border-sidebar-border px-3 py-2.5">
+        <span className="text-xs font-semibold uppercase tracking-wider">
           יומן אירועים
         </span>
         {events.length > 0 && (
-          <span className="text-xs text-muted-foreground tabular-nums">
+          <span className="text-xs text-sidebar-foreground/70 tabular-nums">
             {events.length.toLocaleString()} אירועים
           </span>
         )}
-      </div>
+      </SidebarHeader>
 
-      <div ref={listRef} className="flex-1 overflow-y-auto scrollbar-thin">
+      <SidebarContent className="gap-0 overflow-y-auto scrollbar-thin">
         {loading && (
           <div className="flex flex-col gap-2 p-3">
             {Array.from({ length: 8 }, (_, i) => (
               <div
                 key={i}
-                className="h-16 rounded-lg bg-muted/50 animate-pulse"
+                className="h-16 rounded-lg bg-sidebar-accent/40 animate-pulse"
               />
             ))}
           </div>
@@ -94,7 +93,7 @@ export default function HistorySidebar({
             <button
               type="button"
               onClick={onRefetch}
-              className="text-xs px-3 py-1.5 rounded-md border border-border hover:bg-muted transition-colors"
+              className="text-xs px-3 py-1.5 rounded-md border border-sidebar-border hover:bg-sidebar-accent transition-colors"
             >
               נסה שוב
             </button>
@@ -102,7 +101,7 @@ export default function HistorySidebar({
         )}
 
         {!loading && !error && events.length === 0 && (
-          <div className="flex items-center justify-center h-32 text-xs text-muted-foreground">
+          <div className="flex items-center justify-center h-32 text-xs text-sidebar-foreground/70">
             אין אירועים בטווח הזמן הנבחר
           </div>
         )}
@@ -122,10 +121,10 @@ export default function HistorySidebar({
                 type="button"
                 onClick={() => onSeek(idx)}
                 className={cn(
-                  'w-full text-right px-3 py-2.5 border-b border-border/40 transition-colors',
+                  'w-full text-right px-3 py-2.5 border-b border-sidebar-border/40 transition-colors',
                   isActive
-                    ? 'bg-primary/8 border-l-2 border-l-primary'
-                    : 'hover:bg-muted/40',
+                    ? 'bg-sidebar-accent/50 border-s-2 border-s-primary'
+                    : 'hover:bg-sidebar-accent/30',
                 )}
                 dir="rtl"
               >
@@ -153,13 +152,13 @@ export default function HistorySidebar({
                         {(ev.cities ?? []).slice(0, 8).map((c) => (
                           <span
                             key={c.id ?? c.name}
-                            className="text-[10px] text-muted-foreground bg-muted px-1.5 py-px rounded"
+                            className="text-[10px] text-sidebar-foreground/70 bg-sidebar-accent/40 px-1.5 py-px rounded"
                           >
                             {c.name}
                           </span>
                         ))}
                         {cityCount > 8 && (
-                          <span className="text-[10px] text-muted-foreground">
+                          <span className="text-[10px] text-sidebar-foreground/70">
                             +{cityCount - 8}
                           </span>
                         )}
@@ -168,11 +167,11 @@ export default function HistorySidebar({
                   </div>
 
                   <div className="flex flex-col items-end shrink-0 gap-0.5 pt-0.5">
-                    <span className="text-[10px] text-muted-foreground tabular-nums whitespace-nowrap">
+                    <span className="text-[10px] text-sidebar-foreground/70 tabular-nums whitespace-nowrap">
                       {formatTime(ev.timestamp)}
                     </span>
                     {ev.origin && (
-                      <span className="text-[9px] text-muted-foreground/50 uppercase tracking-wide">
+                      <span className="text-[9px] text-sidebar-foreground/50 uppercase tracking-wide">
                         {ev.origin}
                       </span>
                     )}
@@ -181,7 +180,7 @@ export default function HistorySidebar({
               </button>
             );
           })}
-      </div>
-    </div>
+      </SidebarContent>
+    </>
   );
 }

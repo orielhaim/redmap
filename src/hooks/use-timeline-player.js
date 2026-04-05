@@ -1,6 +1,6 @@
 'use client';
 
-import { useState, useEffect, useRef, useCallback, useMemo } from 'react';
+import { useState, useEffect, useRef, useCallback } from 'react';
 import {
   buildCumulativeSnapshot,
   recordVisualHold,
@@ -11,15 +11,16 @@ import {
 
 const SPEED_OPTIONS = [1, 2, 5, 10];
 
-export function useTimelinePlayer(events, { baseSpeed = 30, gapThresholdMs = 800 } = {}) {
+export function useTimelinePlayer(
+  events,
+  { baseSpeed = 30, gapThresholdMs = 800 } = {},
+) {
   const [cursor, setCursor] = useState(0);
   const [playing, setPlaying] = useState(false);
   const [speedMultiplier, setSpeedMultiplier] = useState(1);
-
-  const visualHoldRef = useRef(new Map());
-
   const [snapshotVersion, setSnapshotVersion] = useState(0);
 
+  const visualHoldRef = useRef(new Map());
   const snapshotRef = useRef(null);
 
   const playingRef = useRef(false);
@@ -28,9 +29,15 @@ export function useTimelinePlayer(events, { baseSpeed = 30, gapThresholdMs = 800
   const timerRef = useRef(null);
   const pruneTimerRef = useRef(null);
 
-  useEffect(() => { playingRef.current = playing; }, [playing]);
-  useEffect(() => { cursorRef.current = cursor; }, [cursor]);
-  useEffect(() => { speedRef.current = speedMultiplier; }, [speedMultiplier]);
+  useEffect(() => {
+    playingRef.current = playing;
+  }, [playing]);
+  useEffect(() => {
+    cursorRef.current = cursor;
+  }, [cursor]);
+  useEffect(() => {
+    speedRef.current = speedMultiplier;
+  }, [speedMultiplier]);
 
   useEffect(() => {
     stop();
@@ -54,35 +61,29 @@ export function useTimelinePlayer(events, { baseSpeed = 30, gapThresholdMs = 800
     }
   };
 
-  const updateSnapshot = useCallback((idx) => {
-    if (events.length === 0) return;
-    const base = buildCumulativeSnapshot(events, idx);
-    // Record all active cities into visual hold with real-time expiry
-    recordVisualHold(visualHoldRef.current, base, MIN_VISUAL_DURATION_MS);
-    // Merge base with visual hold
-    const merged = mergeWithVisualHold(base, visualHoldRef.current);
-    snapshotRef.current = merged;
-    setSnapshotVersion((v) => v + 1);
-  }, [events]);
+  const updateSnapshot = useCallback(
+    (idx) => {
+      if (events.length === 0) return;
+      const base = buildCumulativeSnapshot(events, idx);
+      recordVisualHold(visualHoldRef.current, base, MIN_VISUAL_DURATION_MS);
+      const merged = mergeWithVisualHold(base, visualHoldRef.current);
+      snapshotRef.current = merged;
+      setSnapshotVersion((v) => v + 1);
+    },
+    [events],
+  );
 
-  /**
-   * Start a prune interval that cleans expired visual holds and
-   * triggers re-render so fading cities disappear.
-   */
   const startPruneLoop = useCallback(() => {
     clearPruneTimer();
     pruneTimerRef.current = setInterval(() => {
       const pruned = pruneVisualHold(visualHoldRef.current);
-      if (pruned) {
-        // Rebuild merged snapshot with current cursor's base
-        if (events.length > 0) {
-          const base = buildCumulativeSnapshot(events, cursorRef.current);
-          const merged = mergeWithVisualHold(base, visualHoldRef.current);
-          snapshotRef.current = merged;
-          setSnapshotVersion((v) => v + 1);
-        }
+      if (pruned && events.length > 0) {
+        const base = buildCumulativeSnapshot(events, cursorRef.current);
+        const merged = mergeWithVisualHold(base, visualHoldRef.current);
+        snapshotRef.current = merged;
+        setSnapshotVersion((v) => v + 1);
       }
-    }, 200); // Check 5x/sec
+    }, 150);
   }, [events]);
 
   const stopPruneLoop = useCallback(() => {
@@ -106,14 +107,17 @@ export function useTimelinePlayer(events, { baseSpeed = 30, gapThresholdMs = 800
     const scaledGap = realGapMs / effectiveSpeed;
     const delay = Math.min(scaledGap, gapThresholdMs / speedRef.current);
 
-    timerRef.current = setTimeout(() => {
-      if (!playingRef.current) return;
-      const nextIdx = cursorRef.current + 1;
-      cursorRef.current = nextIdx;
-      setCursor(nextIdx);
-      updateSnapshot(nextIdx);
-      scheduleNext();
-    }, Math.max(delay, 30));
+    timerRef.current = setTimeout(
+      () => {
+        if (!playingRef.current) return;
+        const nextIdx = cursorRef.current + 1;
+        cursorRef.current = nextIdx;
+        setCursor(nextIdx);
+        updateSnapshot(nextIdx);
+        scheduleNext();
+      },
+      Math.max(delay, 30),
+    );
   }, [events, baseSpeed, gapThresholdMs, updateSnapshot]);
 
   const play = useCallback(() => {
@@ -134,12 +138,8 @@ export function useTimelinePlayer(events, { baseSpeed = 30, gapThresholdMs = 800
     playingRef.current = false;
     setPlaying(false);
     clearTimer();
-    // Don't stop prune loop immediately — let remaining holds expire visually
-    // Stop after a generous timeout
     setTimeout(() => {
-      if (!playingRef.current) {
-        stopPruneLoop();
-      }
+      if (!playingRef.current) stopPruneLoop();
     }, MIN_VISUAL_DURATION_MS + 500);
   }, [stopPruneLoop]);
 
@@ -150,15 +150,17 @@ export function useTimelinePlayer(events, { baseSpeed = 30, gapThresholdMs = 800
     stopPruneLoop();
   }, [stopPruneLoop]);
 
-  const seekTo = useCallback((idx) => {
-    const clamped = Math.max(0, Math.min(events.length - 1, idx));
-    cursorRef.current = clamped;
-    setCursor(clamped);
-    // On manual seek, clear visual hold and recompute fresh
-    visualHoldRef.current.clear();
-    updateSnapshot(clamped);
-    if (playingRef.current) scheduleNext();
-  }, [events.length, scheduleNext, updateSnapshot]);
+  const seekTo = useCallback(
+    (idx) => {
+      const clamped = Math.max(0, Math.min(events.length - 1, idx));
+      cursorRef.current = clamped;
+      setCursor(clamped);
+      visualHoldRef.current.clear();
+      updateSnapshot(clamped);
+      if (playingRef.current) scheduleNext();
+    },
+    [events.length, scheduleNext, updateSnapshot],
+  );
 
   const stepForward = useCallback(() => {
     pause();
@@ -179,7 +181,8 @@ export function useTimelinePlayer(events, { baseSpeed = 30, gapThresholdMs = 800
   }, [pause, updateSnapshot]);
 
   const togglePlay = useCallback(() => {
-    if (playingRef.current) pause(); else play();
+    if (playingRef.current) pause();
+    else play();
   }, [play, pause]);
 
   const cycleSpeed = useCallback(() => {
@@ -195,18 +198,26 @@ export function useTimelinePlayer(events, { baseSpeed = 30, gapThresholdMs = 800
     });
   }, [scheduleNext]);
 
-  const setSpeed = useCallback((mult) => {
-    if (!SPEED_OPTIONS.includes(mult)) return;
-    speedRef.current = mult;
-    setSpeedMultiplier(mult);
-    if (playingRef.current) {
-      clearTimer();
-      queueMicrotask(() => scheduleNext());
-    }
-  }, [scheduleNext]);
+  const setSpeed = useCallback(
+    (mult) => {
+      if (!SPEED_OPTIONS.includes(mult)) return;
+      speedRef.current = mult;
+      setSpeedMultiplier(mult);
+      if (playingRef.current) {
+        clearTimer();
+        queueMicrotask(() => scheduleNext());
+      }
+    },
+    [scheduleNext],
+  );
 
-  // Cleanup on unmount
-  useEffect(() => () => { clearTimer(); clearPruneTimer(); }, []);
+  useEffect(
+    () => () => {
+      clearTimer();
+      clearPruneTimer();
+    },
+    [],
+  );
 
   const currentEvent = events[cursor] ?? null;
   const progress = events.length > 1 ? cursor / (events.length - 1) : 0;
@@ -218,7 +229,6 @@ export function useTimelinePlayer(events, { baseSpeed = 30, gapThresholdMs = 800
     progress,
     speedMultiplier,
     speedOptions: SPEED_OPTIONS,
-    // The merged snapshot including visual holds
     timelineSnapshot: snapshotRef.current,
     snapshotVersion,
     play,

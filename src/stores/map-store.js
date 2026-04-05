@@ -162,28 +162,23 @@ async function fetchRange(startDate, endDate, origin) {
 
 export const useMapStore = create(
   immer((set, get) => ({
-    // ─── UI state ───
     mode: MODES.NORMAL,
     sidebarOpen: true,
     activePreset: '24h',
     timeRange: TIME_PRESETS[0].getDates(),
     selectedEventIndex: null,
+    mapAutoFocusPreference: true,
 
-    // ─── History cache ───
     eventsById: {},
     fetchedRanges: [],
-    // Current filtered+sorted events for the active time range
     activeEvents: [],
     historyLoading: false,
     historyError: null,
     // Track current fetch so we can cancel
     _fetchId: 0,
 
-    // ─── Computed/derived ───
     timePresets: TIME_PRESETS,
     modes: MODES,
-
-    // ─── Actions ───
 
     setMode: (mode) =>
       set((s) => {
@@ -208,6 +203,16 @@ export const useMapStore = create(
         s.sidebarOpen = !s.sidebarOpen;
       }),
 
+    setSidebarOpen: (open) =>
+      set((s) => {
+        s.sidebarOpen = Boolean(open);
+      }),
+
+    setMapAutoFocusPreference: (enabled) =>
+      set((s) => {
+        s.mapAutoFocusPreference = Boolean(enabled);
+      }),
+
     setSelectedEventIndex: (idx) =>
       set((s) => {
         s.selectedEventIndex = idx;
@@ -229,11 +234,6 @@ export const useMapStore = create(
       get().fetchHistory();
     },
 
-    /**
-     * Core optimized fetch. Computes gaps between what we already have
-     * and what we need, fetches only the missing ranges, merges into cache,
-     * then recomputes activeEvents from the full cache.
-     */
     fetchHistory: async (forceRefresh = false) => {
       const state = get();
       const { timeRange, fetchedRanges, eventsById } = state;
@@ -242,19 +242,16 @@ export const useMapStore = create(
       const requestedStartMs = toEpochStart(timeRange.startDate);
       const requestedEndMs = toEpochEnd(timeRange.endDate);
 
-      // Increment fetch ID to track cancellation
       const fetchId = state._fetchId + 1;
       set((s) => {
         s._fetchId = fetchId;
         s.historyError = null;
       });
 
-      // If not forcing refresh, check if we already fully cover this range
       if (!forceRefresh) {
         const gaps = findGaps(fetchedRanges, requestedStartMs, requestedEndMs);
 
         if (gaps.length === 0) {
-          // We already have all the data — just recompute activeEvents
           const filtered = filterEventsFromCache(
             eventsById,
             requestedStartMs,
@@ -268,12 +265,10 @@ export const useMapStore = create(
           return;
         }
 
-        // We have gaps to fill
         set((s) => {
           s.historyLoading = true;
         });
 
-        // Meanwhile, show what we already have instantly
         const partialFiltered = filterEventsFromCache(
           eventsById,
           requestedStartMs,
@@ -332,7 +327,6 @@ export const useMapStore = create(
           });
         }
       } else {
-        // Force refresh — clear cache and refetch everything
         set((s) => {
           s.historyLoading = true;
           s.eventsById = {};
@@ -376,14 +370,10 @@ export const useMapStore = create(
       }
     },
 
-    /**
-     * Re-enrich activeEvents when cityCache becomes available or changes.
-     */
     setCityCache: (cityCache) => {
       set((s) => {
         s._cityCache = cityCache;
       });
-      // Re-enrich existing active events
       const state = get();
       if (state.activeEvents.length > 0) {
         const enriched = enrichEvents(
@@ -394,7 +384,6 @@ export const useMapStore = create(
           s.activeEvents = enriched;
         });
       }
-      // Also re-enrich the full cache
       if (cityCache && Object.keys(state.eventsById).length > 0) {
         const reEnriched = {};
         for (const [id, ev] of Object.entries(state.eventsById)) {
@@ -403,12 +392,8 @@ export const useMapStore = create(
       }
     },
 
-    // Internal ref to cityCache (not serialized)
     _cityCache: null,
 
-    /**
-     * Clear the entire cache (e.g. if API key changes).
-     */
     clearCache: () =>
       set((s) => {
         s.eventsById = {};
@@ -418,10 +403,6 @@ export const useMapStore = create(
   })),
 );
 
-/**
- * Filter events from the flat cache object by timestamp range,
- * return sorted array.
- */
 function filterEventsFromCache(eventsById, startMs, endMs) {
   const result = [];
   for (const ev of Object.values(eventsById)) {
@@ -434,22 +415,16 @@ function filterEventsFromCache(eventsById, startMs, endMs) {
   return result;
 }
 
-/**
- * Strip enrichment so we can re-enrich with new cityCache.
- * We only need the original city fields.
- */
 function stripEnrichment(ev) {
   return {
     ...ev,
     cities: (ev.cities ?? []).map((c) => ({
       id: c.id,
       name: c.name,
-      // keep only the original API fields
       ...(c.countdown != null ? { countdown: c.countdown } : {}),
       ...(c.zone != null ? { zone: c.zone } : {}),
     })),
   };
 }
 
-// Export constants for use in components
 export { MODES, TIME_PRESETS };
