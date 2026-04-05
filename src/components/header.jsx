@@ -9,6 +9,7 @@ import {
   Home,
   Map as MapIcon,
   TrendingUp,
+  Info,
   Settings,
   Menu,
   X,
@@ -27,6 +28,7 @@ const NAV_LINKS = [
   { href: '/', label: 'Overview', icon: Home },
   { href: '/map', label: 'Map', icon: MapIcon },
   { href: '/prediction', label: 'Prediction', icon: TrendingUp },
+  { href: '/about', label: 'About', icon: Info },
 ];
 
 function NavLink({ href, label, icon: Icon, onClick }) {
