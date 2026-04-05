@@ -26,19 +26,23 @@ function badgeClass(type) {
 
 function dotClass(type) {
   if (type === 'newsFlash') return 'bg-amber-400';
-  if (type === 'endAlert')  return 'bg-emerald-400';
+  if (type === 'endAlert') return 'bg-emerald-400';
   return 'bg-primary';
 }
 
 function formatTime(ts) {
-  try { return format(parseISO(ts), 'dd/MM HH:mm'); }
-  catch { return ts; }
+  try {
+    return format(parseISO(ts), 'dd/MM HH:mm');
+  } catch {
+    return ts;
+  }
 }
 
 export default function HistorySidebar({
   events,
   cursor,
   playing,
+  mode,
   onSeek,
   loading,
   error,
@@ -76,7 +80,10 @@ export default function HistorySidebar({
         {loading && (
           <div className="flex flex-col gap-2 p-3">
             {Array.from({ length: 8 }, (_, i) => (
-              <div key={i} className="h-16 rounded-lg bg-muted/50 animate-pulse" />
+              <div
+                key={i}
+                className="h-16 rounded-lg bg-muted/50 animate-pulse"
+              />
             ))}
           </div>
         )}
@@ -100,69 +107,80 @@ export default function HistorySidebar({
           </div>
         )}
 
-        {!loading && !error && displayEvents.map(({ ev, idx }, di) => {
-          const isActive = cursor != null && idx === cursor;
-          const cityCount = (ev.cities ?? []).length;
+        {!loading &&
+          !error &&
+          displayEvents.map(({ ev, idx }, di) => {
+            const isActive = cursor != null && idx === cursor;
+            const cityCount = (ev.cities ?? []).length;
 
-          return (
-            <button
-              key={ev.id ?? idx}
-              ref={(el) => { itemRefs.current[di] = el; }}
-              type="button"
-              onClick={() => onSeek(idx)}
-              className={cn(
-                'w-full text-right px-3 py-2.5 border-b border-border/40 transition-colors',
-                isActive
-                  ? 'bg-primary/8 border-l-2 border-l-primary'
-                  : 'hover:bg-muted/40',
-              )}
-              dir="rtl"
-            >
-              <div className="flex items-start justify-between gap-2">
-                <div className="flex flex-col items-start gap-1.5 min-w-0 flex-1">
-                  <div className="flex items-center gap-1.5">
-                    <span className={cn('size-1.5 rounded-full shrink-0 mt-px', dotClass(ev.type))} />
-                    <span className={cn(
-                      'inline-flex items-center px-1.5 py-0.5 rounded text-[10px] font-medium border',
-                      badgeClass(ev.type),
-                    )}>
-                      {TYPE_LABELS[ev.type] ?? ev.type}
-                    </span>
+            return (
+              <button
+                key={ev.id ?? idx}
+                ref={(el) => {
+                  itemRefs.current[di] = el;
+                }}
+                type="button"
+                onClick={() => onSeek(idx)}
+                className={cn(
+                  'w-full text-right px-3 py-2.5 border-b border-border/40 transition-colors',
+                  isActive
+                    ? 'bg-primary/8 border-l-2 border-l-primary'
+                    : 'hover:bg-muted/40',
+                )}
+                dir="rtl"
+              >
+                <div className="flex items-start justify-between gap-2">
+                  <div className="flex flex-col items-start gap-1.5 min-w-0 flex-1">
+                    <div className="flex items-center gap-1.5">
+                      <span
+                        className={cn(
+                          'size-1.5 rounded-full shrink-0 mt-px',
+                          dotClass(ev.type),
+                        )}
+                      />
+                      <span
+                        className={cn(
+                          'inline-flex items-center px-1.5 py-0.5 rounded text-[10px] font-medium border',
+                          badgeClass(ev.type),
+                        )}
+                      >
+                        {TYPE_LABELS[ev.type] ?? ev.type}
+                      </span>
+                    </div>
+
+                    {cityCount > 0 && (
+                      <div className="flex flex-wrap gap-1" dir="rtl">
+                        {(ev.cities ?? []).slice(0, 8).map((c) => (
+                          <span
+                            key={c.id ?? c.name}
+                            className="text-[10px] text-muted-foreground bg-muted px-1.5 py-px rounded"
+                          >
+                            {c.name}
+                          </span>
+                        ))}
+                        {cityCount > 8 && (
+                          <span className="text-[10px] text-muted-foreground">
+                            +{cityCount - 8}
+                          </span>
+                        )}
+                      </div>
+                    )}
                   </div>
 
-                  {cityCount > 0 && (
-                    <div className="flex flex-wrap gap-1" dir="rtl">
-                      {(ev.cities ?? []).slice(0, 8).map((c) => (
-                        <span
-                          key={c.id ?? c.name}
-                          className="text-[10px] text-muted-foreground bg-muted px-1.5 py-px rounded"
-                        >
-                          {c.name}
-                        </span>
-                      ))}
-                      {cityCount > 8 && (
-                        <span className="text-[10px] text-muted-foreground">
-                          +{cityCount - 8}
-                        </span>
-                      )}
-                    </div>
-                  )}
-                </div>
-
-                <div className="flex flex-col items-end shrink-0 gap-0.5 pt-0.5">
-                  <span className="text-[10px] text-muted-foreground tabular-nums whitespace-nowrap">
-                    {formatTime(ev.timestamp)}
-                  </span>
-                  {ev.origin && (
-                    <span className="text-[9px] text-muted-foreground/50 uppercase tracking-wide">
-                      {ev.origin}
+                  <div className="flex flex-col items-end shrink-0 gap-0.5 pt-0.5">
+                    <span className="text-[10px] text-muted-foreground tabular-nums whitespace-nowrap">
+                      {formatTime(ev.timestamp)}
                     </span>
-                  )}
+                    {ev.origin && (
+                      <span className="text-[9px] text-muted-foreground/50 uppercase tracking-wide">
+                        {ev.origin}
+                      </span>
+                    )}
+                  </div>
                 </div>
-              </div>
-            </button>
-          );
-        })}
+              </button>
+            );
+          })}
       </div>
     </div>
   );

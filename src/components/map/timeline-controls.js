@@ -2,18 +2,32 @@
 
 import { useCallback, useMemo, useRef, useState } from 'react';
 import { format, parseISO } from 'date-fns';
-import { Play, Pause, SkipBack, SkipForward, X } from 'lucide-react';
+import { Play, Pause, SkipBack, SkipForward, Gauge } from 'lucide-react';
 import { cn } from '@/lib/utils';
 import { colorForType } from '@/lib/map/alert-engine';
+import {
+  Select,
+  SelectContent,
+  SelectItem,
+  SelectTrigger,
+  SelectValue,
+} from '@/components/ui/select';
 
 function tsMs(ts) {
-  try { return parseISO(ts).getTime(); } catch { return 0; }
+  try {
+    return parseISO(ts).getTime();
+  } catch {
+    return 0;
+  }
 }
 
 function formatTs(ts) {
   if (!ts) return '--:--';
-  try { return format(parseISO(ts), 'HH:mm:ss'); }
-  catch { return '--:--'; }
+  try {
+    return format(parseISO(ts), 'HH:mm:ss');
+  } catch {
+    return '--:--';
+  }
 }
 
 function formatTickLabel(ms, multiDay) {
@@ -23,10 +37,10 @@ function formatTickLabel(ms, multiDay) {
 }
 
 function tickIntervalMs(rangMs) {
-  if (rangMs <= 2 * 3600_000)   return 15 * 60_000;   // ≤ 2h  → every 15 min
-  if (rangMs <= 12 * 3600_000)  return 60 * 60_000;   // ≤ 12h → every hour
-  if (rangMs <= 3 * 86400_000)  return 6 * 3600_000;  // ≤ 3d  → every 6h
-  if (rangMs <= 7 * 86400_000)  return 12 * 3600_000; // ≤ 7d  → every 12h
+  if (rangMs <= 2 * 3600_000) return 15 * 60_000;
+  if (rangMs <= 12 * 3600_000) return 60 * 60_000;
+  if (rangMs <= 3 * 86400_000) return 6 * 3600_000;
+  if (rangMs <= 7 * 86400_000) return 12 * 3600_000;
   return 24 * 3600_000;
 }
 
@@ -38,37 +52,51 @@ function TimeScrubber({ events, cursor, startMs, endMs, onSeek }) {
   const multiDay = duration > 86400_000;
   const intervalMs = tickIntervalMs(duration);
 
-  const marks = useMemo(() => events.map((ev, idx) => ({
-    pos: (tsMs(ev.timestamp) - startMs) / duration,
-    color: colorForType(ev.type),
-    idx,
-  })), [events, startMs, duration]);
+  const marks = useMemo(
+    () =>
+      events.map((ev, idx) => ({
+        pos: (tsMs(ev.timestamp) - startMs) / duration,
+        color: colorForType(ev.type),
+        idx,
+      })),
+    [events, startMs, duration],
+  );
 
   const ticks = useMemo(() => {
     const result = [];
     if (duration <= 0) return result;
     const firstTick = Math.ceil(startMs / intervalMs) * intervalMs;
     for (let t = firstTick; t <= endMs; t += intervalMs) {
-      result.push({ pos: (t - startMs) / duration, label: formatTickLabel(t, multiDay) });
+      result.push({
+        pos: (t - startMs) / duration,
+        label: formatTickLabel(t, multiDay),
+      });
     }
     return result;
   }, [startMs, endMs, duration, intervalMs, multiDay]);
 
-  const cursorPos = events.length > 0
-    ? (tsMs(events[cursor]?.timestamp) - startMs) / duration
-    : 0;
+  const cursorPos =
+    events.length > 0
+      ? (tsMs(events[cursor]?.timestamp) - startMs) / duration
+      : 0;
 
-  const seekToPos = useCallback((pos) => {
-    if (events.length === 0) return;
-    const targetMs = startMs + pos * duration;
-    let best = 0;
-    let bestDist = Infinity;
-    for (let i = 0; i < events.length; i++) {
-      const dist = Math.abs(tsMs(events[i].timestamp) - targetMs);
-      if (dist < bestDist) { bestDist = dist; best = i; }
-    }
-    onSeek(best);
-  }, [events, startMs, duration, onSeek]);
+  const seekToPos = useCallback(
+    (pos) => {
+      if (events.length === 0) return;
+      const targetMs = startMs + pos * duration;
+      let best = 0;
+      let bestDist = Infinity;
+      for (let i = 0; i < events.length; i++) {
+        const dist = Math.abs(tsMs(events[i].timestamp) - targetMs);
+        if (dist < bestDist) {
+          bestDist = dist;
+          best = i;
+        }
+      }
+      onSeek(best);
+    },
+    [events, startMs, duration, onSeek],
+  );
 
   const posFromEvent = useCallback((e) => {
     const rect = trackRef.current?.getBoundingClientRect();
@@ -76,16 +104,22 @@ function TimeScrubber({ events, cursor, startMs, endMs, onSeek }) {
     return Math.max(0, Math.min(1, (e.clientX - rect.left) / rect.width));
   }, []);
 
-  const handlePointerDown = useCallback((e) => {
-    e.currentTarget.setPointerCapture(e.pointerId);
-    setDragging(true);
-    seekToPos(posFromEvent(e));
-  }, [seekToPos, posFromEvent]);
+  const handlePointerDown = useCallback(
+    (e) => {
+      e.currentTarget.setPointerCapture(e.pointerId);
+      setDragging(true);
+      seekToPos(posFromEvent(e));
+    },
+    [seekToPos, posFromEvent],
+  );
 
-  const handlePointerMove = useCallback((e) => {
-    if (!dragging) return;
-    seekToPos(posFromEvent(e));
-  }, [dragging, seekToPos, posFromEvent]);
+  const handlePointerMove = useCallback(
+    (e) => {
+      if (!dragging) return;
+      seekToPos(posFromEvent(e));
+    },
+    [dragging, seekToPos, posFromEvent],
+  );
 
   const handlePointerUp = useCallback(() => setDragging(false), []);
 
@@ -109,7 +143,11 @@ function TimeScrubber({ events, cursor, startMs, endMs, onSeek }) {
           <div
             key={idx}
             className="absolute top-2 w-px h-4 rounded-full pointer-events-none"
-            style={{ left: `${pos * 100}%`, backgroundColor: color, opacity: 0.85 }}
+            style={{
+              left: `${pos * 100}%`,
+              backgroundColor: color,
+              opacity: 0.85,
+            }}
           />
         ))}
 
@@ -142,22 +180,34 @@ export default function TimelineControls({
   cursor,
   playing,
   currentEvent,
+  speedMultiplier,
+  speedOptions,
   onToggle,
   onSeek,
   onStepBack,
   onStepForward,
-  onClose,
+  onSetSpeed,
 }) {
   const total = events.length;
 
-  const startMs = useMemo(() => total > 0 ? tsMs(events[0].timestamp) : 0, [events, total]);
-  const endMs   = useMemo(() => total > 0 ? tsMs(events[total - 1].timestamp) : 0, [events, total]);
+  const startMs = useMemo(
+    () => (total > 0 ? tsMs(events[0].timestamp) : 0),
+    [events, total],
+  );
+  const endMs = useMemo(
+    () => (total > 0 ? tsMs(events[total - 1].timestamp) : 0),
+    [events, total],
+  );
 
   const currentTs = currentEvent?.timestamp;
   const currentDate = currentTs ? format(parseISO(currentTs), 'dd/MM') : null;
+  const speedOpts = speedOptions ?? [1, 2, 5, 10];
 
   return (
-    <div className="flex flex-col gap-2 px-4 pt-2 pb-3 bg-card/95 backdrop-blur border-t border-border" dir="ltr">
+    <div
+      className="flex flex-col gap-2 px-4 pt-2 pb-3 bg-card/95 backdrop-blur border-t border-border"
+      dir="ltr"
+    >
       <div className="flex items-center justify-between">
         <div className="flex items-center gap-2">
           <span className="font-mono text-sm tabular-nums text-foreground">
@@ -169,14 +219,6 @@ export default function TimelineControls({
             </span>
           )}
         </div>
-        <button
-          type="button"
-          onClick={onClose}
-          className="flex items-center gap-1 text-[11px] text-muted-foreground hover:text-foreground transition-colors"
-        >
-          <X size={12} />
-          סגור
-        </button>
       </div>
 
       {total > 0 && (
@@ -189,44 +231,82 @@ export default function TimelineControls({
         />
       )}
 
-      <div className="flex items-center justify-center gap-2">
-        <TransportBtn
-          onClick={onStepBack}
-          disabled={cursor === 0 || total === 0}
-          aria-label="Previous"
-        >
-          <SkipBack size={14} />
-        </TransportBtn>
+      <div className="flex items-center justify-center gap-3">
+        <div className="flex items-center gap-1.5">
+          <Gauge
+            size={12}
+            className="shrink-0 text-muted-foreground"
+            aria-hidden
+          />
+          <Select
+            value={String(speedMultiplier)}
+            onValueChange={(v) => onSetSpeed(Number(v))}
+            disabled={total === 0}
+          >
+            <SelectTrigger
+              size="sm"
+              className="h-7 text-[10px] font-semibold tabular-nums bg-card border-border"
+              aria-label="Playback speed"
+            >
+              <SelectValue placeholder="Speed" />
+            </SelectTrigger>
+            <SelectContent className="bg-card border-border w-auto">
+              {speedOpts.map((s) => (
+                <SelectItem
+                  key={s}
+                  value={String(s)}
+                  className="text-xs font-semibold tabular-nums"
+                >
+                  x{s}
+                </SelectItem>
+              ))}
+            </SelectContent>
+          </Select>
+        </div>
 
-        <button
-          type="button"
-          onClick={onToggle}
-          disabled={total === 0}
-          className={cn(
-            'flex items-center justify-center size-9 rounded-full border-2 transition-colors',
-            total === 0
-              ? 'opacity-40 cursor-not-allowed border-border'
-              : playing
-                ? 'border-primary bg-primary/20 text-primary hover:bg-primary/30'
-                : 'border-border hover:bg-muted',
-          )}
-          aria-label={playing ? 'Pause' : 'Play'}
-        >
-          {playing ? <Pause size={15} /> : <Play size={15} />}
-        </button>
+        <div className="h-4 w-px bg-border" />
 
-        <TransportBtn
-          onClick={onStepForward}
-          disabled={cursor >= total - 1 || total === 0}
-          aria-label="Next"
-        >
-          <SkipForward size={14} />
-        </TransportBtn>
+        <div className="flex items-center gap-2">
+          <TransportBtn
+            onClick={onStepBack}
+            disabled={cursor === 0 || total === 0}
+            aria-label="Previous"
+          >
+            <SkipBack size={14} />
+          </TransportBtn>
+
+          <button
+            type="button"
+            onClick={onToggle}
+            disabled={total === 0}
+            className={cn(
+              'flex items-center justify-center size-9 rounded-full border-2 transition-colors',
+              total === 0
+                ? 'opacity-40 cursor-not-allowed border-border'
+                : playing
+                  ? 'border-primary bg-primary/20 text-primary hover:bg-primary/30'
+                  : 'border-border hover:bg-muted',
+            )}
+            aria-label={playing ? 'Pause' : 'Play'}
+          >
+            {playing ? <Pause size={15} /> : <Play size={15} />}
+          </button>
+
+          <TransportBtn
+            onClick={onStepForward}
+            disabled={cursor >= total - 1 || total === 0}
+            aria-label="Next"
+          >
+            <SkipForward size={14} />
+          </TransportBtn>
+        </div>
       </div>
 
       {total > 0 && (
         <div className="flex items-center justify-center gap-1 text-[10px] text-muted-foreground">
-          <span className="tabular-nums">{cursor + 1} / {total}</span>
+          <span className="tabular-nums">
+            {cursor + 1} / {total}
+          </span>
         </div>
       )}
     </div>

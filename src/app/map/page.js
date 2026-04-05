@@ -1,44 +1,47 @@
 'use client';
 
-import { useState, useMemo, useCallback } from 'react';
-import { format, subDays, subWeeks, subMonths, startOfDay } from 'date-fns';
+import { useEffect, useMemo, useCallback } from 'react';
 import { Map as MapIcon, Play, RefreshCw, Loader2, Database } from 'lucide-react';
 import { cn } from '@/lib/utils';
 import { useCityCache } from '@/hooks/use-city-cache';
-import { useMapHistory } from '@/hooks/use-map-history';
 import { useTimelinePlayer } from '@/hooks/use-timeline-player';
-import {
-  buildEventSnapshot,
-  buildCumulativeSnapshot,
-  buildLatestSnapshot,
-} from '@/lib/map/alert-engine';
+import { useMapStore, MODES, TIME_PRESETS } from '@/stores/map-store';
+import { buildEventSnapshot } from '@/lib/map/alert-engine';
 import MapCanvas from '@/components/map/map-canvas';
 import HistorySidebar from '@/components/map/history-sidebar';
 import TimelineControls from '@/components/map/timeline-controls';
 
-const MODES = { NORMAL: 'normal', TIMELINE: 'timeline' };
-
-const TIME_PRESETS = [
-  { label: '24h', getDates: () => ({ startDate: fmt(subDays(new Date(), 1)),  endDate: fmt(new Date()) }) },
-  { label: '3d',  getDates: () => ({ startDate: fmt(subDays(new Date(), 3)),  endDate: fmt(new Date()) }) },
-  { label: '7d',  getDates: () => ({ startDate: fmt(subWeeks(new Date(), 1)), endDate: fmt(new Date()) }) },
-  { label: '1mo', getDates: () => ({ startDate: fmt(subMonths(new Date(), 1)),endDate: fmt(new Date()) }) },
-];
-
-function fmt(d) { return format(startOfDay(d), 'yyyy-MM-dd'); }
-
 export default function MapPage() {
-  const [mode, setMode] = useState(MODES.NORMAL);
-  const [sidebarOpen, setSidebarOpen] = useState(true);
-  const [timeRange, setTimeRange] = useState(() => TIME_PRESETS[0].getDates());
-  const [activePreset, setActivePreset] = useState('24h');
+  const mode = useMapStore((s) => s.mode);
+  const sidebarOpen = useMapStore((s) => s.sidebarOpen);
+  const activePreset = useMapStore((s) => s.activePreset);
+  const selectedEventIndex = useMapStore((s) => s.selectedEventIndex);
+  const events = useMapStore((s) => s.activeEvents);
+  const historyLoading = useMapStore((s) => s.historyLoading);
+  const historyError = useMapStore((s) => s.historyError);
 
-  const [selectedEventIndex, setSelectedEventIndex] = useState(null);
+  const enterTimeline = useMapStore((s) => s.enterTimeline);
+  const exitTimeline = useMapStore((s) => s.exitTimeline);
+  const toggleSidebar = useMapStore((s) => s.toggleSidebar);
+  const selectPreset = useMapStore((s) => s.selectPreset);
+  const setSelectedEventIndex = useMapStore((s) => s.setSelectedEventIndex);
+  const toggleSelectedEventIndex = useMapStore((s) => s.toggleSelectedEventIndex);
+  const fetchHistory = useMapStore((s) => s.fetchHistory);
+  const setCityCache = useMapStore((s) => s.setCityCache);
 
-  const { cityCache, loading: cacheLoading, error: cacheError, refresh: refreshCache } = useCityCache();
+  const {
+    cityCache,
+    loading: cacheLoading,
+    error: cacheError,
+    refresh: refreshCache,
+  } = useCityCache();
 
-  const { events, loading: historyLoading, error: historyError, refetch } =
-    useMapHistory(timeRange, cityCache);
+  useEffect(() => {
+    if (cityCache) {
+      setCityCache(cityCache);
+      fetchHistory();
+    }
+  }, [cityCache, setCityCache, fetchHistory]);
 
   const player = useTimelinePlayer(events);
 
@@ -46,49 +49,44 @@ export default function MapPage() {
     if (events.length === 0) return null;
 
     if (mode === MODES.NORMAL) {
-      if (selectedEventIndex !== null) {
+      if (selectedEventIndex !== null && events[selectedEventIndex]) {
         return buildEventSnapshot(events[selectedEventIndex]);
       }
-      return buildLatestSnapshot(events);
+      return null;
     }
 
-    return buildCumulativeSnapshot(events, player.cursor);
-  }, [events, mode, selectedEventIndex, player.cursor]);
+    return player.timelineSnapshot;
+  }, [events, mode, selectedEventIndex, player.timelineSnapshot, player.snapshotVersion]);
 
   const isLoading = cacheLoading || historyLoading;
 
-  const selectPreset = useCallback((preset) => {
-    setActivePreset(preset.label);
-    setTimeRange(preset.getDates());
-    setSelectedEventIndex(null);
-  }, []);
-
-  const handleSidebarSeek = useCallback((idx) => {
-    if (mode === MODES.TIMELINE) {
-      player.seekTo(idx);
-      setSelectedEventIndex(null);
-    } else {
-      setSelectedEventIndex((prev) => prev === idx ? null : idx);
-    }
-  }, [mode, player]);
+  const handleSidebarSeek = useCallback(
+    (idx) => {
+      if (mode === MODES.TIMELINE) {
+        player.seekTo(idx);
+        setSelectedEventIndex(null);
+      } else {
+        toggleSelectedEventIndex(idx);
+      }
+    },
+    [mode, player, setSelectedEventIndex, toggleSelectedEventIndex],
+  );
 
   const handleEnterTimeline = useCallback(() => {
-    setMode(MODES.TIMELINE);
-    setSelectedEventIndex(null);
-  }, []);
+    enterTimeline();
+  }, [enterTimeline]);
 
   const handleExitTimeline = useCallback(() => {
-    setMode(MODES.NORMAL);
+    exitTimeline();
     player.pause();
-    setSelectedEventIndex(null);
-  }, [player]);
+  }, [exitTimeline, player]);
 
-  const selectedEvent = selectedEventIndex !== null ? events[selectedEventIndex] : null;
+  const selectedEvent =
+    selectedEventIndex !== null ? events[selectedEventIndex] : null;
 
   return (
     <div className="flex flex-col" style={{ height: 'calc(100vh - 3.5rem)' }}>
       <div className="flex items-center gap-2 px-3 py-2 border-b border-border bg-card/60 backdrop-blur-sm shrink-0 flex-wrap">
-
         <div className="flex items-center gap-0.5 rounded-lg border border-border bg-muted p-0.5">
           <ModeButton active={mode === MODES.NORMAL} onClick={handleExitTimeline}>
             <MapIcon size={13} />
@@ -130,7 +128,11 @@ export default function MapPage() {
           <div className="flex items-center gap-1 text-xs text-destructive">
             <Database size={11} />
             City cache error —
-            <button type="button" onClick={refreshCache} className="underline flex items-center gap-0.5 ml-0.5">
+            <button
+              type="button"
+              onClick={refreshCache}
+              className="underline flex items-center gap-0.5 ml-0.5"
+            >
               <RefreshCw size={10} /> retry
             </button>
           </div>
@@ -138,7 +140,11 @@ export default function MapPage() {
         {historyError && !historyLoading && (
           <div className="flex items-center gap-1 text-xs text-destructive">
             History error —
-            <button type="button" onClick={refetch} className="underline flex items-center gap-0.5 ml-0.5">
+            <button
+              type="button"
+              onClick={() => fetchHistory(true)}
+              className="underline flex items-center gap-0.5 ml-0.5"
+            >
               <RefreshCw size={10} /> retry
             </button>
           </div>
@@ -169,7 +175,7 @@ export default function MapPage() {
 
         <button
           type="button"
-          onClick={() => setSidebarOpen((v) => !v)}
+          onClick={toggleSidebar}
           className="text-xs px-2.5 py-1 rounded-md border border-border hover:bg-muted transition-colors text-muted-foreground"
         >
           {sidebarOpen ? 'Hide sidebar' : 'Show sidebar'}
@@ -181,6 +187,7 @@ export default function MapPage() {
           <MapCanvas
             cityCache={cityCache}
             snapshot={activeSnapshot}
+            events={events}
             className="flex-1"
           />
 
@@ -190,11 +197,18 @@ export default function MapPage() {
               cursor={player.cursor}
               playing={player.playing}
               currentEvent={player.currentEvent}
+              speedMultiplier={player.speedMultiplier}
+              speedOptions={player.speedOptions}
               onToggle={player.togglePlay}
-              onSeek={(idx) => { player.seekTo(idx); setSelectedEventIndex(null); }}
+              onSeek={(idx) => {
+                player.seekTo(idx);
+                setSelectedEventIndex(null);
+              }}
               onStepBack={player.stepBack}
               onStepForward={player.stepForward}
               onClose={handleExitTimeline}
+              onCycleSpeed={player.cycleSpeed}
+              onSetSpeed={player.setSpeed}
             />
           )}
         </div>
@@ -209,7 +223,7 @@ export default function MapPage() {
               onSeek={handleSidebarSeek}
               loading={historyLoading}
               error={historyError}
-              onRefetch={refetch}
+              onRefetch={() => fetchHistory(true)}
             />
           </div>
         )}
@@ -225,7 +239,9 @@ function ModeButton({ active, onClick, children }) {
       onClick={onClick}
       className={cn(
         'flex items-center gap-1.5 px-3 py-1.5 text-xs rounded-md font-medium transition-colors',
-        active ? 'bg-card text-foreground shadow-sm' : 'text-muted-foreground hover:text-foreground',
+        active
+          ? 'bg-card text-foreground shadow-sm'
+          : 'text-muted-foreground hover:text-foreground',
       )}
     >
       {children}
