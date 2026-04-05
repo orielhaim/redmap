@@ -4,12 +4,12 @@ import Link from 'next/link';
 import { usePathname, useRouter } from 'next/navigation';
 import { useState, useEffect } from 'react';
 import { motion } from 'motion/react';
+import Image from 'next/image';
 import {
   Home,
   Map as MapIcon,
   TrendingUp,
   Settings,
-  AlertTriangle,
   Menu,
   X,
 } from 'lucide-react';
@@ -110,15 +110,8 @@ export default function SiteHeader() {
       <div className="mx-auto max-w-7xl px-4 h-14 flex items-center gap-6">
         {/* Logo */}
         <Link href="/" className="flex items-center gap-2.5 shrink-0">
-          <div className="relative flex items-center justify-center size-7 rounded-md bg-primary/15 border border-primary/30">
-            <AlertTriangle
-              size={14}
-              className="text-primary fill-primary/20"
-              strokeWidth={2}
-            />
-            <span className="absolute inset-0 rounded-md bg-primary/10 animate-pulse" />
-          </div>
-          <span className="font-semibold text-sm tracking-tight">
+          <Image src="/icon0.svg" alt="RedMap" width={40} height={35} />
+          <span className="font-semibold text-md tracking-tight">
             Red<span className="text-primary">Map</span>
           </span>
         </Link>

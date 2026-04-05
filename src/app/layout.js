@@ -1,3 +1,4 @@
+import Script from 'next/script';
 import Header from '@/components/header';
 import HydrateStores from '@/components/hydrate-stores';
 import { Geist, Geist_Mono } from 'next/font/google';
@@ -27,6 +28,11 @@ export default function RootLayout({ children }) {
     >
       <body className="min-h-full flex flex-col">
         <HydrateStores />
+        <Script
+          src="https://tracking.orielhaim.com/api/script.js"
+          data-site-id="c37b67b31281"
+          strategy="afterInteractive"
+        />
         <div className="flex flex-col min-h-screen">
           <Header />
           <main className="flex-1">{children}</main>
