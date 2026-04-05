@@ -29,7 +29,7 @@ export function useApi(fetcher, deps = []) {
         setLoading(false);
       }
     }
-  }, deps); // eslint-disable-line react-hooks/exhaustive-deps
+  }, deps);
 
   useEffect(() => {
     run();

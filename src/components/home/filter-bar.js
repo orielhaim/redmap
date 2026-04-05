@@ -1,7 +1,14 @@
 'use client';
 
 import { useState } from 'react';
-import { format, subDays, subMonths, startOfYear } from 'date-fns';
+import {
+  format,
+  parse,
+  isValid,
+  subDays,
+  subMonths,
+  startOfYear,
+} from 'date-fns';
 import { CalendarIcon, RotateCcw, Filter } from 'lucide-react';
 import { cn } from '@/lib/utils';
 import { useDashboardStore } from '@/stores/dashboard-store';
@@ -67,12 +74,27 @@ const PRESETS = [
   },
 ];
 
+function parseDateOnly(ymd) {
+  if (!ymd) return undefined;
+  const d = parse(ymd, 'yyyy-MM-dd', new Date());
+  return isValid(d) ? d : undefined;
+}
+
 function DatePicker({ value, onChange, label }) {
   const [open, setOpen] = useState(false);
-  const parsed = value ? new Date(value) : undefined;
+  const parsed = parseDateOnly(value);
+  const [month, setMonth] = useState(() => parsed ?? new Date());
 
   return (
-    <Popover open={open} onOpenChange={setOpen}>
+    <Popover
+      open={open}
+      onOpenChange={(next) => {
+        if (next) {
+          setMonth(parseDateOnly(value) ?? new Date());
+        }
+        setOpen(next);
+      }}
+    >
       <PopoverTrigger
         className={cn(
           'flex items-center gap-2 px-3 h-8 rounded-md text-sm border border-border bg-card hover:bg-muted transition-colors',
@@ -81,7 +103,7 @@ function DatePicker({ value, onChange, label }) {
         type="button"
       >
         <CalendarIcon size={13} className="text-muted-foreground" />
-        {value ? format(new Date(value), 'MMM d, yyyy') : label}
+        {parsed ? format(parsed, 'MMM d, yyyy') : label}
       </PopoverTrigger>
       <PopoverContent
         className="w-auto p-0 bg-card border-border"
@@ -89,6 +111,8 @@ function DatePicker({ value, onChange, label }) {
       >
         <Calendar
           mode="single"
+          month={month}
+          onMonthChange={setMonth}
           selected={parsed}
           onSelect={(d) => {
             if (d) {
