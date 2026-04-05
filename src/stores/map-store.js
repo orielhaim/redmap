@@ -1,14 +1,10 @@
 import { create } from 'zustand';
 import { immer } from 'zustand/middleware/immer';
+import { persist } from 'zustand/middleware';
 import { getHistory } from '@/lib/api/redalert';
-import {
-  format,
-  subDays,
-  subWeeks,
-  subMonths,
-  startOfDay,
-  parseISO,
-} from 'date-fns';
+import { format, subDays, subWeeks, subMonths, startOfDay } from 'date-fns';
+import { mergeConsecutiveEvents } from '@/lib/map/alert-engine';
+import { idbJSONStorage } from '@/lib/preferences/storage';
 
 const PAGE_SIZE = 1000;
 const MAX_PAGES = 20;
@@ -50,27 +46,12 @@ const TIME_PRESETS = [
   },
 ];
 
-/**
- * Parse a date string to epoch ms (start of day or end of day).
- */
 function toEpochStart(dateStr) {
   return new Date(`${dateStr}T00:00:00Z`).getTime();
 }
 function toEpochEnd(dateStr) {
   return new Date(`${dateStr}T23:59:59Z`).getTime();
 }
-
-/**
- * The history cache stores all fetched events keyed by their timestamp.
- * We also track which date ranges have been fully fetched so we can
- * compute the "gap" when the user widens the range.
- *
- * fetchedRanges: Array<{ startMs: number, endMs: number }>
- *   – sorted, non-overlapping intervals that we've already loaded.
- *
- * eventsById: Map-like object keyed by event id → event
- *   (we use a plain object so immer can track it)
- */
 
 function mergeRange(ranges, newRange) {
   const merged = [];
@@ -97,10 +78,6 @@ function mergeRange(ranges, newRange) {
   return merged;
 }
 
-/**
- * Given the desired [startMs, endMs] and already-fetched ranges,
- * return an array of gap ranges that still need fetching.
- */
 function findGaps(fetchedRanges, startMs, endMs) {
   const gaps = [];
   let cursor = startMs;
@@ -160,247 +137,318 @@ async function fetchRange(startDate, endDate, origin) {
   return allData;
 }
 
+function recomputeActiveEvents(state) {
+  const raw = state.rawEvents;
+  const merge = state.mergeEnabled;
+  return merge ? mergeConsecutiveEvents(raw) : raw;
+}
+
 export const useMapStore = create(
-  immer((set, get) => ({
-    mode: MODES.NORMAL,
-    sidebarOpen: true,
-    activePreset: '24h',
-    timeRange: TIME_PRESETS[0].getDates(),
-    selectedEventIndex: null,
-    mapAutoFocusPreference: true,
+  persist(
+    immer((set, get) => ({
+      // ── Persisted preferences ──
+      mapAutoFocusPreference: true,
+      activePreset: '24h',
+      mergeEnabled: false,
 
-    eventsById: {},
-    fetchedRanges: [],
-    activeEvents: [],
-    historyLoading: false,
-    historyError: null,
-    // Track current fetch so we can cancel
-    _fetchId: 0,
+      // ── Ephemeral state (NOT persisted) ──
+      mode: MODES.NORMAL,
+      sidebarOpen: true,
+      timeRange: TIME_PRESETS[0].getDates(),
+      selectedEventIndex: null,
 
-    timePresets: TIME_PRESETS,
-    modes: MODES,
+      eventsById: {},
+      fetchedRanges: [],
+      rawEvents: [],
+      activeEvents: [],
+      historyLoading: false,
+      historyError: null,
+      _fetchId: 0,
+      _cityCache: null,
 
-    setMode: (mode) =>
-      set((s) => {
-        s.mode = mode;
-        s.selectedEventIndex = null;
-      }),
+      timePresets: TIME_PRESETS,
+      modes: MODES,
 
-    enterTimeline: () =>
-      set((s) => {
-        s.mode = MODES.TIMELINE;
-        s.selectedEventIndex = null;
-      }),
+      setMode: (mode) =>
+        set((s) => {
+          s.mode = mode;
+          s.selectedEventIndex = null;
+        }),
 
-    exitTimeline: () =>
-      set((s) => {
-        s.mode = MODES.NORMAL;
-        s.selectedEventIndex = null;
-      }),
+      enterTimeline: () =>
+        set((s) => {
+          s.mode = MODES.TIMELINE;
+          s.selectedEventIndex = null;
+        }),
 
-    toggleSidebar: () =>
-      set((s) => {
-        s.sidebarOpen = !s.sidebarOpen;
-      }),
+      exitTimeline: () =>
+        set((s) => {
+          s.mode = MODES.NORMAL;
+          s.selectedEventIndex = null;
+        }),
 
-    setSidebarOpen: (open) =>
-      set((s) => {
-        s.sidebarOpen = Boolean(open);
-      }),
+      toggleSidebar: () =>
+        set((s) => {
+          s.sidebarOpen = !s.sidebarOpen;
+        }),
 
-    setMapAutoFocusPreference: (enabled) =>
-      set((s) => {
-        s.mapAutoFocusPreference = Boolean(enabled);
-      }),
+      setSidebarOpen: (open) =>
+        set((s) => {
+          s.sidebarOpen = Boolean(open);
+        }),
 
-    setSelectedEventIndex: (idx) =>
-      set((s) => {
-        s.selectedEventIndex = idx;
-      }),
+      setMapAutoFocusPreference: (enabled) =>
+        set((s) => {
+          s.mapAutoFocusPreference = Boolean(enabled);
+        }),
 
-    toggleSelectedEventIndex: (idx) =>
-      set((s) => {
-        s.selectedEventIndex = s.selectedEventIndex === idx ? null : idx;
-      }),
+      setSelectedEventIndex: (idx) =>
+        set((s) => {
+          s.selectedEventIndex = idx;
+        }),
 
-    selectPreset: (preset) => {
-      const dates = preset.getDates();
-      set((s) => {
-        s.activePreset = preset.label;
-        s.timeRange = dates;
-        s.selectedEventIndex = null;
-      });
-      // Trigger fetch after state update
-      get().fetchHistory();
-    },
+      toggleSelectedEventIndex: (idx) =>
+        set((s) => {
+          s.selectedEventIndex = s.selectedEventIndex === idx ? null : idx;
+        }),
 
-    fetchHistory: async (forceRefresh = false) => {
-      const state = get();
-      const { timeRange, fetchedRanges, eventsById } = state;
-      const cityCache = state._cityCache;
+      selectPreset: (preset) => {
+        const dates = preset.getDates();
+        set((s) => {
+          s.activePreset = preset.label;
+          s.timeRange = dates;
+          s.selectedEventIndex = null;
+        });
+        get().fetchHistory();
+      },
 
-      const requestedStartMs = toEpochStart(timeRange.startDate);
-      const requestedEndMs = toEpochEnd(timeRange.endDate);
+      setMergeEnabled: (val) =>
+        set((s) => {
+          s.mergeEnabled = val;
+          s.selectedEventIndex = null;
+          s.activeEvents = recomputeActiveEvents({
+            rawEvents: s.rawEvents,
+            mergeEnabled: val,
+          });
+        }),
 
-      const fetchId = state._fetchId + 1;
-      set((s) => {
-        s._fetchId = fetchId;
-        s.historyError = null;
-      });
+      toggleMerge: () =>
+        set((s) => {
+          s.mergeEnabled = !s.mergeEnabled;
+          s.selectedEventIndex = null;
+          s.activeEvents = recomputeActiveEvents({
+            rawEvents: s.rawEvents,
+            mergeEnabled: s.mergeEnabled,
+          });
+        }),
 
-      if (!forceRefresh) {
-        const gaps = findGaps(fetchedRanges, requestedStartMs, requestedEndMs);
+      fetchHistory: async (forceRefresh = false) => {
+        const state = get();
+        const { timeRange, fetchedRanges, eventsById } = state;
+        const cityCache = state._cityCache;
 
-        if (gaps.length === 0) {
-          const filtered = filterEventsFromCache(
+        const requestedStartMs = toEpochStart(timeRange.startDate);
+        const requestedEndMs = toEpochEnd(timeRange.endDate);
+
+        const fetchId = state._fetchId + 1;
+        set((s) => {
+          s._fetchId = fetchId;
+          s.historyError = null;
+        });
+
+        if (!forceRefresh) {
+          const gaps = findGaps(
+            fetchedRanges,
+            requestedStartMs,
+            requestedEndMs,
+          );
+
+          if (gaps.length === 0) {
+            const filtered = filterEventsFromCache(
+              eventsById,
+              requestedStartMs,
+              requestedEndMs,
+            );
+            const enriched = enrichEvents(filtered, cityCache);
+            set((s) => {
+              s.rawEvents = enriched;
+              s.activeEvents = recomputeActiveEvents({
+                rawEvents: enriched,
+                mergeEnabled: s.mergeEnabled,
+              });
+              s.historyLoading = false;
+            });
+            return;
+          }
+
+          set((s) => {
+            s.historyLoading = true;
+          });
+
+          const partialFiltered = filterEventsFromCache(
             eventsById,
             requestedStartMs,
             requestedEndMs,
           );
-          const enriched = enrichEvents(filtered, cityCache);
+          if (partialFiltered.length > 0) {
+            const enrichedPartial = enrichEvents(partialFiltered, cityCache);
+            set((s) => {
+              s.rawEvents = enrichedPartial;
+              s.activeEvents = recomputeActiveEvents({
+                rawEvents: enrichedPartial,
+                mergeEnabled: s.mergeEnabled,
+              });
+            });
+          }
+
+          try {
+            const newEventsById = { ...eventsById };
+            let newRanges = [...fetchedRanges];
+
+            for (const gap of gaps) {
+              if (get()._fetchId !== fetchId) return;
+
+              const startDate = msToDateStr(gap.startMs);
+              const endDate = msToDateStr(gap.endMs);
+              const rows = await fetchRange(startDate, endDate);
+
+              for (const ev of rows) {
+                const id =
+                  ev.id ?? `${ev.timestamp}_${ev.cities?.[0]?.name ?? ''}`;
+                newEventsById[id] = ev;
+              }
+
+              newRanges = mergeRange(newRanges, {
+                startMs: gap.startMs,
+                endMs: gap.endMs,
+              });
+            }
+
+            if (get()._fetchId !== fetchId) return;
+
+            const filtered = filterEventsFromCache(
+              newEventsById,
+              requestedStartMs,
+              requestedEndMs,
+            );
+            const enriched = enrichEvents(filtered, cityCache);
+
+            set((s) => {
+              s.eventsById = newEventsById;
+              s.fetchedRanges = newRanges;
+              s.rawEvents = enriched;
+              s.activeEvents = recomputeActiveEvents({
+                rawEvents: enriched,
+                mergeEnabled: s.mergeEnabled,
+              });
+              s.historyLoading = false;
+            });
+          } catch (err) {
+            if (get()._fetchId !== fetchId) return;
+            set((s) => {
+              s.historyError = err?.message ?? 'Failed to load history';
+              s.historyLoading = false;
+            });
+          }
+        } else {
           set((s) => {
-            s.activeEvents = enriched;
-            s.historyLoading = false;
+            s.historyLoading = true;
+            s.eventsById = {};
+            s.fetchedRanges = [];
+            s.rawEvents = [];
+            s.activeEvents = [];
           });
-          return;
-        }
 
-        set((s) => {
-          s.historyLoading = true;
-        });
+          try {
+            const rows = await fetchRange(
+              timeRange.startDate,
+              timeRange.endDate,
+            );
 
-        const partialFiltered = filterEventsFromCache(
-          eventsById,
-          requestedStartMs,
-          requestedEndMs,
-        );
-        if (partialFiltered.length > 0) {
-          const enrichedPartial = enrichEvents(partialFiltered, cityCache);
-          set((s) => {
-            s.activeEvents = enrichedPartial;
-          });
-        }
+            if (get()._fetchId !== fetchId) return;
 
-        try {
-          const newEventsById = { ...eventsById };
-          let newRanges = [...fetchedRanges];
-
-          for (const gap of gaps) {
-            if (get()._fetchId !== fetchId) return; // cancelled
-
-            const startDate = msToDateStr(gap.startMs);
-            const endDate = msToDateStr(gap.endMs);
-            const rows = await fetchRange(startDate, endDate);
-
+            const newEventsById = {};
             for (const ev of rows) {
               const id =
                 ev.id ?? `${ev.timestamp}_${ev.cities?.[0]?.name ?? ''}`;
               newEventsById[id] = ev;
             }
 
-            newRanges = mergeRange(newRanges, {
-              startMs: gap.startMs,
-              endMs: gap.endMs,
+            const filtered = filterEventsFromCache(
+              newEventsById,
+              requestedStartMs,
+              requestedEndMs,
+            );
+            const enriched = enrichEvents(filtered, cityCache);
+
+            set((s) => {
+              s.eventsById = newEventsById;
+              s.fetchedRanges = [
+                { startMs: requestedStartMs, endMs: requestedEndMs },
+              ];
+              s.rawEvents = enriched;
+              s.activeEvents = recomputeActiveEvents({
+                rawEvents: enriched,
+                mergeEnabled: s.mergeEnabled,
+              });
+              s.historyLoading = false;
+            });
+          } catch (err) {
+            if (get()._fetchId !== fetchId) return;
+            set((s) => {
+              s.historyError = err?.message ?? 'Failed to load history';
+              s.historyLoading = false;
             });
           }
+        }
+      },
 
-          if (get()._fetchId !== fetchId) return; // cancelled
-
-          const filtered = filterEventsFromCache(
-            newEventsById,
-            requestedStartMs,
-            requestedEndMs,
+      setCityCache: (cityCache) => {
+        set((s) => {
+          s._cityCache = cityCache;
+        });
+        const state = get();
+        if (state.rawEvents.length > 0) {
+          const enriched = enrichEvents(
+            state.rawEvents.map(stripEnrichment),
+            cityCache,
           );
-          const enriched = enrichEvents(filtered, cityCache);
-
           set((s) => {
-            s.eventsById = newEventsById;
-            s.fetchedRanges = newRanges;
-            s.activeEvents = enriched;
-            s.historyLoading = false;
-          });
-        } catch (err) {
-          if (get()._fetchId !== fetchId) return;
-          set((s) => {
-            s.historyError = err?.message ?? 'Failed to load history';
-            s.historyLoading = false;
+            s.rawEvents = enriched;
+            s.activeEvents = recomputeActiveEvents({
+              rawEvents: enriched,
+              mergeEnabled: s.mergeEnabled,
+            });
           });
         }
-      } else {
+      },
+
+      clearCache: () =>
         set((s) => {
-          s.historyLoading = true;
           s.eventsById = {};
           s.fetchedRanges = [];
+          s.rawEvents = [];
           s.activeEvents = [];
-        });
-
-        try {
-          const rows = await fetchRange(timeRange.startDate, timeRange.endDate);
-
-          if (get()._fetchId !== fetchId) return;
-
-          const newEventsById = {};
-          for (const ev of rows) {
-            const id = ev.id ?? `${ev.timestamp}_${ev.cities?.[0]?.name ?? ''}`;
-            newEventsById[id] = ev;
-          }
-
-          const filtered = filterEventsFromCache(
-            newEventsById,
-            requestedStartMs,
-            requestedEndMs,
-          );
-          const enriched = enrichEvents(filtered, cityCache);
-
-          set((s) => {
-            s.eventsById = newEventsById;
-            s.fetchedRanges = [
-              { startMs: requestedStartMs, endMs: requestedEndMs },
-            ];
-            s.activeEvents = enriched;
-            s.historyLoading = false;
-          });
-        } catch (err) {
-          if (get()._fetchId !== fetchId) return;
-          set((s) => {
-            s.historyError = err?.message ?? 'Failed to load history';
-            s.historyLoading = false;
-          });
-        }
-      }
-    },
-
-    setCityCache: (cityCache) => {
-      set((s) => {
-        s._cityCache = cityCache;
-      });
-      const state = get();
-      if (state.activeEvents.length > 0) {
-        const enriched = enrichEvents(
-          state.activeEvents.map(stripEnrichment),
-          cityCache,
-        );
-        set((s) => {
-          s.activeEvents = enriched;
-        });
-      }
-      if (cityCache && Object.keys(state.eventsById).length > 0) {
-        const reEnriched = {};
-        for (const [id, ev] of Object.entries(state.eventsById)) {
-          reEnriched[id] = ev; // raw events stay raw in cache
-        }
-      }
-    },
-
-    _cityCache: null,
-
-    clearCache: () =>
-      set((s) => {
-        s.eventsById = {};
-        s.fetchedRanges = [];
-        s.activeEvents = [];
+        }),
+    })),
+    {
+      name: 'redmap-map',
+      storage: idbJSONStorage,
+      skipHydration: true,
+      partialize: (state) => ({
+        mapAutoFocusPreference: state.mapAutoFocusPreference,
+        activePreset: state.activePreset,
+        mergeEnabled: state.mergeEnabled,
       }),
-  })),
+      onRehydrateStorage: () => (state) => {
+        if (!state) return;
+        const preset = TIME_PRESETS.find((p) => p.label === state.activePreset);
+        if (preset) {
+          useMapStore.setState({ timeRange: preset.getDates() });
+        }
+      },
+    },
+  ),
 );
 
 function filterEventsFromCache(eventsById, startMs, endMs) {

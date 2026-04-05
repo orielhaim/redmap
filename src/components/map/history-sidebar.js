@@ -111,6 +111,7 @@ export default function HistorySidebar({
           displayEvents.map(({ ev, idx }, di) => {
             const isActive = cursor != null && idx === cursor;
             const cityCount = (ev.cities ?? []).length;
+            const isMerged = ev._merged;
 
             return (
               <button
@@ -145,6 +146,11 @@ export default function HistorySidebar({
                       >
                         {TYPE_LABELS[ev.type] ?? ev.type}
                       </span>
+                      {isMerged && (
+                        <span className="inline-flex items-center px-1.5 py-0.5 rounded text-[10px] font-medium border bg-violet-500/15 text-violet-400 border-violet-500/30">
+                          {ev._mergedCount} מוזגו
+                        </span>
+                      )}
                     </div>
 
                     {cityCount > 0 && (
@@ -170,6 +176,11 @@ export default function HistorySidebar({
                     <span className="text-[10px] text-sidebar-foreground/70 tabular-nums whitespace-nowrap">
                       {formatTime(ev.timestamp)}
                     </span>
+                    {isMerged && ev._mergedLastTimestamp && (
+                      <span className="text-[9px] text-sidebar-foreground/50 tabular-nums whitespace-nowrap">
+                        עד {formatTime(ev._mergedLastTimestamp)}
+                      </span>
+                    )}
                     {ev.origin && (
                       <span className="text-[9px] text-sidebar-foreground/50 uppercase tracking-wide">
                         {ev.origin}

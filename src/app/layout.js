@@ -1,4 +1,5 @@
 import Header from '@/components/header';
+import HydrateStores from '@/components/hydrate-stores';
 import { Geist, Geist_Mono } from 'next/font/google';
 import './globals.css';
 
@@ -25,11 +26,10 @@ export default function RootLayout({ children }) {
       className={`${geistSans.variable} ${geistMono.variable} h-full antialiased`}
     >
       <body className="min-h-full flex flex-col">
+        <HydrateStores />
         <div className="flex flex-col min-h-screen">
           <Header />
-          <main className="flex-1">
-            {children}
-          </main>
+          <main className="flex-1">{children}</main>
         </div>
       </body>
     </html>

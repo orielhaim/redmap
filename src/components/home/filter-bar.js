@@ -1,14 +1,8 @@
 'use client';
 
 import { useState } from 'react';
-import {
-  format,
-  parse,
-  isValid,
-  subDays,
-  subMonths,
-  startOfYear,
-} from 'date-fns';
+import { format, parse, isValid } from 'date-fns';
+import { HOME_DATE_PRESETS } from '@/lib/home/date-presets';
 import { CalendarIcon, RotateCcw, Filter } from 'lucide-react';
 import { cn } from '@/lib/utils';
 import { useDashboardStore } from '@/stores/dashboard-store';
@@ -34,44 +28,6 @@ const ORIGINS = [
   { value: 'westbank', label: 'West Bank' },
   { value: 'iran', label: 'Iran' },
   { value: 'houthi', label: 'Houthi' },
-];
-
-const PRESETS = [
-  {
-    label: '24h',
-    getRange: () => ({
-      start: format(subDays(new Date(), 1), 'yyyy-MM-dd'),
-      end: format(new Date(), 'yyyy-MM-dd'),
-    }),
-  },
-  {
-    label: '7d',
-    getRange: () => ({
-      start: format(subDays(new Date(), 7), 'yyyy-MM-dd'),
-      end: format(new Date(), 'yyyy-MM-dd'),
-    }),
-  },
-  {
-    label: '30d',
-    getRange: () => ({
-      start: format(subDays(new Date(), 30), 'yyyy-MM-dd'),
-      end: format(new Date(), 'yyyy-MM-dd'),
-    }),
-  },
-  {
-    label: '3mo',
-    getRange: () => ({
-      start: format(subMonths(new Date(), 3), 'yyyy-MM-dd'),
-      end: format(new Date(), 'yyyy-MM-dd'),
-    }),
-  },
-  {
-    label: 'YTD',
-    getRange: () => ({
-      start: format(startOfYear(new Date()), 'yyyy-MM-dd'),
-      end: format(new Date(), 'yyyy-MM-dd'),
-    }),
-  },
 ];
 
 function parseDateOnly(ymd) {
@@ -144,7 +100,7 @@ export default function FilterBar() {
 
       {/* Presets */}
       <div className="flex items-center gap-1">
-        {PRESETS.map((p) => (
+        {HOME_DATE_PRESETS.map((p) => (
           <button
             key={p.label}
             onClick={() => {

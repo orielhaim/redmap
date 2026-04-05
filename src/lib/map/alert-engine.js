@@ -3,6 +3,7 @@ const CLEAR_TYPE = 'endAlert';
 
 const MIN_VISUAL_DURATION_MS = 1200;
 const DECAY_MS = 5 * 60 * 1000;
+const DEFAULT_MERGE_GAP_MS = 2 * 60 * 1000;
 
 export function buildEventSnapshot(event) {
   const snap = new Map();
@@ -259,4 +260,78 @@ function closeRing(ring) {
   const last = ring[ring.length - 1];
   if (first[0] !== last[0] || first[1] !== last[1]) ring.push([...first]);
   return ring;
+}
+
+export function mergeConsecutiveEvents(
+  events,
+  { maxGapMs = DEFAULT_MERGE_GAP_MS } = {},
+) {
+  if (!events || events.length === 0) return [];
+
+  const merged = [];
+  let group = null; // { type, timestamp, cities: Map<name, city>, ids: Set, origin, events: [] }
+
+  for (let i = 0; i < events.length; i++) {
+    const ev = events[i];
+    const evTs = toEpoch(ev.timestamp);
+
+    if (group && canMerge(group, ev, evTs, maxGapMs)) {
+      // extend current group
+      group.lastTs = evTs;
+      group.sourceEvents.push(ev);
+      for (const c of ev.cities ?? []) {
+        if (c.name && !group.cityMap.has(c.name)) {
+          group.cityMap.set(c.name, c);
+        }
+      }
+    } else {
+      // flush previous group
+      if (group) merged.push(flushGroup(group));
+      // start new group
+      group = {
+        type: ev.type,
+        timestamp: ev.timestamp,
+        firstTs: evTs,
+        lastTs: evTs,
+        origin: ev.origin ?? null,
+        cityMap: new Map(),
+        sourceEvents: [ev],
+        firstId: ev.id,
+      };
+      for (const c of ev.cities ?? []) {
+        if (c.name) group.cityMap.set(c.name, c);
+      }
+    }
+  }
+
+  // flush last group
+  if (group) merged.push(flushGroup(group));
+
+  return merged;
+}
+
+function canMerge(group, ev, evTs, maxGapMs) {
+  if (ev.type !== group.type) return false;
+  if (evTs - group.lastTs > maxGapMs) return false;
+  return true;
+}
+
+function flushGroup(group) {
+  const cities = Array.from(group.cityMap.values());
+  const mergedCount = group.sourceEvents.length;
+
+  return {
+    id: group.firstId,
+    type: group.type,
+    timestamp: group.timestamp,
+    origin: group.origin,
+    cities,
+    // metadata about the merge so the UI can show it
+    _merged: mergedCount > 1,
+    _mergedCount: mergedCount,
+    _mergedLastTimestamp:
+      mergedCount > 1
+        ? group.sourceEvents[mergedCount - 1].timestamp
+        : undefined,
+  };
 }

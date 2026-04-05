@@ -7,6 +7,7 @@ import {
   RefreshCw,
   Loader2,
   Database,
+  Merge,
 } from 'lucide-react';
 import { cn } from '@/lib/utils';
 import { Label } from '@/components/ui/label';
@@ -30,8 +31,10 @@ export default function MapPage() {
   const activePreset = useMapStore((s) => s.activePreset);
   const selectedEventIndex = useMapStore((s) => s.selectedEventIndex);
   const events = useMapStore((s) => s.activeEvents);
+  const rawEvents = useMapStore((s) => s.rawEvents);
   const historyLoading = useMapStore((s) => s.historyLoading);
   const historyError = useMapStore((s) => s.historyError);
+  const mergeEnabled = useMapStore((s) => s.mergeEnabled);
 
   const enterTimeline = useMapStore((s) => s.enterTimeline);
   const exitTimeline = useMapStore((s) => s.exitTimeline);
@@ -48,6 +51,7 @@ export default function MapPage() {
   const setMapAutoFocusPreference = useMapStore(
     (s) => s.setMapAutoFocusPreference,
   );
+  const setMergeEnabled = useMapStore((s) => s.setMergeEnabled);
 
   const {
     cityCache,
@@ -118,6 +122,11 @@ export default function MapPage() {
   const selectedEvent =
     selectedEventIndex !== null ? events[selectedEventIndex] : null;
 
+  const mergedDiff =
+    mergeEnabled && rawEvents.length !== events.length
+      ? rawEvents.length - events.length
+      : 0;
+
   return (
     <div className="flex flex-col" style={{ height: 'calc(100vh - 3.5rem)' }}>
       <div className="flex items-center gap-2 px-3 py-2 border-b border-border bg-card/60 backdrop-blur-sm shrink-0 flex-wrap">
@@ -160,12 +169,7 @@ export default function MapPage() {
 
         <div className="h-4 w-px bg-border" />
 
-        <div
-          className={cn(
-            'flex items-center gap-2',
-            autoFocusSuppressedBySpeed && 'opacity-60',
-          )}
-        >
+        <div className="flex items-center gap-2">
           <Label
             htmlFor="map-auto-focus"
             className={cn(
@@ -182,6 +186,29 @@ export default function MapPage() {
             disabled={autoFocusSuppressedBySpeed}
             onCheckedChange={setMapAutoFocusPreference}
           />
+        </div>
+
+        <div className="h-4 w-px bg-border" />
+
+        <div className="flex items-center gap-2">
+          <Label
+            htmlFor="merge-events"
+            className="text-xs font-normal text-muted-foreground cursor-pointer flex items-center gap-1"
+          >
+            <Merge size={11} className="shrink-0" />
+            Merge
+          </Label>
+          <Switch
+            id="merge-events"
+            size="sm"
+            checked={mergeEnabled}
+            onCheckedChange={setMergeEnabled}
+          />
+          {mergeEnabled && mergedDiff > 0 && (
+            <span className="text-[10px] text-muted-foreground/70 tabular-nums">
+              −{mergedDiff}
+            </span>
+          )}
         </div>
 
         {isLoading && (
@@ -220,6 +247,11 @@ export default function MapPage() {
           <div className="flex items-center gap-1.5 text-xs text-muted-foreground">
             <span>
               Showing event ({(selectedEvent.cities ?? []).length} cities)
+              {selectedEvent._merged && (
+                <span className="text-primary/80 ml-1">
+                  [{selectedEvent._mergedCount} merged]
+                </span>
+              )}
             </span>
             <button
               type="button"
