@@ -22,7 +22,9 @@ import {
   DialogTitle,
 } from '@/components/ui/dialog';
 import { Sheet, SheetContent, SheetTrigger } from '@/components/ui/sheet';
-import SettingsContent from '@/components/settings/settings';
+import SettingsContent, {
+  useDevModeUnlock,
+} from '@/components/settings/settings';
 
 const NAV_LINKS = [
   { href: '/', label: 'Overview', icon: Home },
@@ -65,6 +67,7 @@ function NavLink({ href, label, icon: Icon, onClick }) {
 function SettingsTrigger() {
   const [dialogOpen, setDialogOpen] = useState(false);
   const router = useRouter();
+  const handleTitleClick = useDevModeUnlock();
 
   const handleClick = () => {
     if (window.innerWidth >= 768) {
@@ -88,7 +91,10 @@ function SettingsTrigger() {
       <Dialog open={dialogOpen} onOpenChange={setDialogOpen}>
         <DialogContent className="max-w-lg bg-card border-border">
           <DialogHeader>
-            <DialogTitle className="text-base font-semibold">
+            <DialogTitle
+              className="text-base font-semibold cursor-default select-none"
+              onClick={handleTitleClick}
+            >
               Settings
             </DialogTitle>
           </DialogHeader>

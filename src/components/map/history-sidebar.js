@@ -25,12 +25,6 @@ function badgeClass(type) {
   return 'bg-primary/15 text-primary border-primary/30';
 }
 
-function dotClass(type) {
-  if (type === 'newsFlash') return 'bg-amber-400';
-  if (type === 'endAlert') return 'bg-emerald-400';
-  return 'bg-primary';
-}
-
 function formatTime(ts) {
   try {
     return format(parseISO(ts), 'dd/MM HH:mm');
@@ -132,12 +126,6 @@ export default function HistorySidebar({
                 <div className="flex items-start justify-between gap-2">
                   <div className="flex flex-col items-start gap-1.5 min-w-0 flex-1">
                     <div className="flex items-center gap-1.5">
-                      <span
-                        className={cn(
-                          'size-1.5 rounded-full shrink-0 mt-px',
-                          dotClass(ev.type),
-                        )}
-                      />
                       <span
                         className={cn(
                           'inline-flex items-center px-1.5 py-0.5 rounded text-[10px] font-medium border',

@@ -430,6 +430,61 @@ export const useMapStore = create(
           s.rawEvents = [];
           s.activeEvents = [];
         }),
+
+      ingestRealtimeEvent: (ev) => {
+        const state = get();
+        const id = ev.id ?? `${ev.timestamp}_${ev.cities?.[0]?.name ?? ''}`;
+
+        // Dedupe: skip if already present
+        if (state.eventsById[id]) return null;
+
+        const enriched = enrichEvents([ev], state._cityCache)[0];
+        const enrichedWithId = { ...enriched, id };
+
+        const { timeRange } = state;
+        const startMs = toEpochStart(timeRange.startDate);
+        const endMs = toEpochEnd(timeRange.endDate);
+        const evTs = new Date(ev.timestamp).getTime();
+        const inRange = evTs >= startMs && evTs <= endMs;
+
+        let activeIndex = null;
+
+        set((s) => {
+          s.eventsById[id] = enrichedWithId;
+
+          if (inRange) {
+            // Insert in ascending timestamp order
+            const insertIdx = s.rawEvents.findIndex(
+              (e) => new Date(e.timestamp).getTime() > evTs,
+            );
+            if (insertIdx === -1) {
+              s.rawEvents.push(enrichedWithId);
+            } else {
+              s.rawEvents.splice(insertIdx, 0, enrichedWithId);
+            }
+            s.activeEvents = recomputeActiveEvents({
+              rawEvents: s.rawEvents,
+              mergeEnabled: s.mergeEnabled,
+            });
+            // Find the index of this event inside activeEvents by id
+            const idx = s.activeEvents.findIndex((e) => e.id === id);
+            activeIndex = idx >= 0 ? idx : s.activeEvents.length - 1;
+          }
+        });
+
+        return activeIndex;
+      },
+
+      openMapForLatestEvent: (activeIndex = null) => {
+        const state = get();
+        const idx =
+          activeIndex !== null ? activeIndex : state.activeEvents.length - 1;
+        set((s) => {
+          s.mode = MODES.NORMAL;
+          s.sidebarOpen = true;
+          s.selectedEventIndex = idx >= 0 ? idx : null;
+        });
+      },
     })),
     {
       name: 'redmap-map',

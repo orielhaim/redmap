@@ -1,8 +1,9 @@
-import SettingsContent from "@/components/settings/settings";
-import { Settings } from "lucide-react";
+import SettingsContent from '@/components/settings/settings';
+import { Settings } from 'lucide-react';
+import SettingsPageTitle from './title';
 
 export const metadata = {
-  title: "Settings - RedMap",
+  title: 'Settings - RedMap',
 };
 
 export default function SettingsPage() {
@@ -13,7 +14,7 @@ export default function SettingsPage() {
           <Settings size={16} className="text-muted-foreground" />
         </div>
         <div>
-          <h1 className="text-lg font-semibold">Settings</h1>
+          <SettingsPageTitle />
           <p className="text-sm text-muted-foreground">
             Configure your dashboard preferences
           </p>

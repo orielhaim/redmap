@@ -3,7 +3,7 @@ const CLEAR_TYPE = 'endAlert';
 
 const MIN_VISUAL_DURATION_MS = 1200;
 const DECAY_MS = 5 * 60 * 1000;
-const DEFAULT_MERGE_GAP_MS = 2 * 60 * 1000;
+const DEFAULT_MERGE_GAP_MS = 5 * 60 * 1000;
 
 export function buildEventSnapshot(event) {
   const snap = new Map();

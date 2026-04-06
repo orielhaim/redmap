@@ -265,12 +265,6 @@ export default function MapPage() {
 
         <div className="flex-1" />
 
-        {!isLoading && !historyError && events.length > 0 && (
-          <span className="text-xs text-muted-foreground tabular-nums">
-            {events.length.toLocaleString()} events
-          </span>
-        )}
-
         <button
           type="button"
           onClick={toggleSidebar}

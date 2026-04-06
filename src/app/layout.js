@@ -1,7 +1,9 @@
 import Script from 'next/script';
 import Header from '@/components/header';
 import HydrateStores from '@/components/hydrate-stores';
+import RealtimeAlertListener from '@/components/redalert/realtime-alert-listener';
 import { Geist, Geist_Mono } from 'next/font/google';
+import { Toaster } from '@/components/ui/sonner';
 import './globals.css';
 
 const geistSans = Geist({
@@ -37,6 +39,8 @@ export default function RootLayout({ children }) {
           <Header />
           <main className="flex-1">{children}</main>
         </div>
+        <Toaster />
+        <RealtimeAlertListener />
       </body>
     </html>
   );
