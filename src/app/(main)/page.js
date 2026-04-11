@@ -5,7 +5,7 @@ import DistributionCharts from '@/components/home/distribution-charts';
 import TopSummary from '@/components/home/top-summary';
 
 export const metadata = {
-  title: 'Overview - RedMap',
+  title: 'Radar',
 };
 
 export default function HomePage() {

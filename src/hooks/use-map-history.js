@@ -1,7 +1,7 @@
 'use client';
 
 import { useState, useEffect, useRef, useCallback } from 'react';
-import { getHistory } from '@/lib/api/redalert';
+import { getHistory } from '@/lib/api/siren';
 
 const PAGE_SIZE = 1000;
 const MAX_PAGES = 20;

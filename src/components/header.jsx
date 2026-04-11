@@ -118,7 +118,7 @@ export default function SiteHeader() {
       <div className="mx-auto max-w-7xl px-4 h-14 flex items-center gap-6">
         {/* Logo */}
         <Link href="/" className="flex items-center gap-2.5 shrink-0">
-          <Image src="/icon0.svg" alt="RedMap" width={40} height={35} />
+          <Image src="/icon0.svg" alt="Radar" width={40} height={35} />
           <span className="font-semibold text-md tracking-tight">
             Red<span className="text-primary">Map</span>
           </span>

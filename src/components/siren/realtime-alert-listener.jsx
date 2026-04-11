@@ -18,7 +18,7 @@ export default function RealtimeAlertListener() {
     if (!realtimeAlertsEnabled) return;
 
     const namespace = useTestSocket ? '/test' : '/';
-    const socket = io(`https://redalert.orielhaim.com${namespace}`, {
+    const socket = io(`https://api.siren.co.il${namespace}`, {
       auth: { apiKey: process.env.NEXT_PUBLIC_REDALERT_API_KEY ?? '' },
       transports: ['websocket'],
     });

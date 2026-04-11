@@ -1,7 +1,7 @@
 import { create } from 'zustand';
 import { immer } from 'zustand/middleware/immer';
 import { persist } from 'zustand/middleware';
-import { getHistory } from '@/lib/api/redalert';
+import { getHistory } from '@/lib/api/siren';
 import { format, subDays, subWeeks, subMonths, startOfDay } from 'date-fns';
 import { mergeConsecutiveEvents } from '@/lib/map/alert-engine';
 import { idbJSONStorage } from '@/lib/preferences/storage';
@@ -487,7 +487,7 @@ export const useMapStore = create(
       },
     })),
     {
-      name: 'redmap-map',
+      name: 'radar-map',
       storage: idbJSONStorage,
       skipHydration: true,
       partialize: (state) => ({

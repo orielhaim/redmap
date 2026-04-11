@@ -21,7 +21,7 @@ export default function AboutPage() {
             by="word"
             className="text-4xl font-bold tracking-tight sm:text-5xl"
           >
-            About RedMap
+            About Radar
           </TextAnimate>
         </BlurFade>
 
@@ -46,8 +46,8 @@ export default function AboutPage() {
               <div className="relative">
                 <div className="absolute -inset-3 rounded-full bg-red-500/10 blur-xl" />
                 <Image
-                  src="/redalert.png"
-                  alt="RedAlert"
+                  src="/siren.png"
+                  alt="Siren"
                   width={70}
                   height={70}
                   className="relative shrink-0 drop-shadow-lg"
@@ -55,24 +55,24 @@ export default function AboutPage() {
               </div>
 
               <div className="space-y-2">
-                <h2 className="text-2xl font-bold tracking-tight">RedAlert</h2>
+                <h2 className="text-2xl font-bold tracking-tight">Siren</h2>
                 <p className="max-w-md text-sm text-muted-foreground leading-relaxed">
-                  RedMap is powered by the RedAlert system - a private project
+                  Radar is powered by the Siren system - a private project
                   that aggregates and distributes real-time emergency alerts
                   across Israel. All alert data displayed on this dashboard
-                  originates from RedAlert.
+                  originates from Siren.
                 </p>
               </div>
 
               <Button variant="outline" className="rounded-full">
                 <Link
-                  href="https://redalert.orielhaim.com?utm_source=redmap"
+                  href="https://siren.co.il?utm_source=radar"
                   target="_blank"
                   rel="noopener noreferrer"
                   className="flex items-center justify-center gap-2"
                 >
                   <ExternalLink className="h-3.5 w-3.5" />
-                  Visit RedAlert
+                  Visit Siren
                 </Link>
               </Button>
             </div>
@@ -116,7 +116,7 @@ export default function AboutPage() {
                     </Badge>
                   </div>
                   <p className="text-xs text-muted-foreground leading-relaxed">
-                    Creator and maintainer of the RedAlert system and RedMap
+                    Creator and maintainer of the Siren system and Radar
                     dashboard.
                   </p>
                 </div>
@@ -153,7 +153,7 @@ export default function AboutPage() {
       <BlurFade delay={0.9} inView>
         <div className="relative z-10 flex justify-center border-t border-border/40 pt-10">
           <Link
-            href="https://github.com/orielhaim/redmap"
+            href="https://github.com/orielhaim/radar"
             target="_blank"
             rel="noopener noreferrer"
             className="group flex max-w-md flex-col items-center gap-3 text-center text-sm text-muted-foreground transition-colors hover:text-foreground sm:flex-row sm:text-left"
@@ -163,7 +163,7 @@ export default function AboutPage() {
               className="shrink-0 text-muted-foreground transition-colors group-hover:text-foreground"
             />
             <p className="leading-relaxed">
-              RedMap is an open source project. Source code and contributions
+              Radar is an open source project. Source code and contributions
               are welcome on{' '}
               <span className="font-medium text-foreground underline-offset-4 group-hover:underline">
                 GitHub

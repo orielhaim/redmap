@@ -13,7 +13,7 @@ import {
 } from 'recharts';
 import { useDashboardStore } from '@/stores/dashboard-store';
 import { useApi } from '@/hooks/use-api';
-import { getDistribution } from '@/lib/api/redalert';
+import { getDistribution } from '@/lib/api/siren';
 import { SectionCard, CardError, CardEmpty } from './section-card';
 import { Skeleton } from '@/components/ui/skeleton';
 

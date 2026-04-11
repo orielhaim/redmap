@@ -17,7 +17,7 @@ export const usePreferencesStore = create(
       setUseTestSocket: (enabled) => set({ useTestSocket: Boolean(enabled) }),
     }),
     {
-      name: 'redmap-preferences',
+      name: 'radar-preferences',
       storage: idbJSONStorage,
       skipHydration: true,
     },

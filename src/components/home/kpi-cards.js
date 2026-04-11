@@ -18,7 +18,7 @@ import {
 } from '@/components/ui/tooltip';
 import { useDashboardStore } from '@/stores/dashboard-store';
 import { useApi } from '@/hooks/use-api';
-import { getSummary } from '@/lib/api/redalert';
+import { getSummary } from '@/lib/api/siren';
 import { CardError } from './section-card';
 import { cn } from '@/lib/utils';
 import { format, formatDistanceToNow, parseISO, isValid } from 'date-fns';

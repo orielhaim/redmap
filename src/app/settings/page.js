@@ -3,7 +3,7 @@ import { Settings } from 'lucide-react';
 import SettingsPageTitle from './title';
 
 export const metadata = {
-  title: 'Settings - RedMap',
+  title: 'Settings - Radar',
 };
 
 export default function SettingsPage() {

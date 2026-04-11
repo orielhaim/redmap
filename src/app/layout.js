@@ -1,7 +1,7 @@
 import Script from 'next/script';
 import Header from '@/components/header';
 import HydrateStores from '@/components/hydrate-stores';
-import RealtimeAlertListener from '@/components/redalert/realtime-alert-listener';
+import RealtimeAlertListener from '@/components/siren/realtime-alert-listener';
 import { Geist, Geist_Mono } from 'next/font/google';
 import { Toaster } from '@/components/ui/sonner';
 import './globals.css';
@@ -17,9 +17,9 @@ const geistMono = Geist_Mono({
 });
 
 export const metadata = {
-  title: 'RedMap - Israeli Emergency Alert Dashboard',
+  title: 'Radar - Israeli Emergency Alert Dashboard',
   description:
-    'Real-time analytics and statistics for Israeli emergency alerts powered by the RedAlert API.',
+    'Real-time analytics and statistics for Israeli emergency alerts powered by the Siren system.',
 };
 
 export default function RootLayout({ children }) {

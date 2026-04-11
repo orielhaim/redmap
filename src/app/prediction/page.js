@@ -1,7 +1,7 @@
 import { TrendingUp } from "lucide-react";
 
 export const metadata = {
-  title: "Prediction - RedMap",
+  title: "Prediction - Radar",
 };
 
 export default function PredictionPage() {

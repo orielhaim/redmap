@@ -77,7 +77,7 @@ export const useDashboardStore = create(
         }),
     })),
     {
-      name: 'redmap-dashboard',
+      name: 'radar-dashboard',
       storage: idbJSONStorage,
       skipHydration: true,
       partialize: (state) => ({

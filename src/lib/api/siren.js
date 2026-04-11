@@ -1,9 +1,9 @@
 import ky from "ky";
 
-const apiKey = process.env.NEXT_PUBLIC_REDALERT_API_KEY ?? "";
+const apiKey = process.env.NEXT_PUBLIC_SIREN_API_KEY ?? "";
 
 export const api = ky.create({
-  prefixUrl: "https://redalert.orielhaim.com/api",
+  prefixUrl: "https://api.siren.co.il",
   headers: {
     ...(apiKey ? { "x-api-key": apiKey } : {}),
   },

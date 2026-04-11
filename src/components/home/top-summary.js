@@ -2,7 +2,7 @@
 
 import { useDashboardStore } from "@/stores/dashboard-store";
 import { useApi } from "@/hooks/use-api";
-import { getSummary } from "@/lib/api/redalert";
+import { getSummary } from "@/lib/api/siren";
 import { SectionCard, CardError, CardEmpty } from "./section-card";
 import { Skeleton } from "@/components/ui/skeleton";
 import { MapPin, Layers } from "lucide-react";

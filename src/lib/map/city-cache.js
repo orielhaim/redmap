@@ -1,8 +1,8 @@
 'use client';
 
-import { api } from '@/lib/api/redalert';
+import { api } from '@/lib/api/siren';
 
-const DB_NAME = 'redmap-city-cache';
+const DB_NAME = 'radar-city-cache';
 const DB_VERSION = 1;
 const STORE_NAME = 'cities';
 const META_STORE = 'meta';
