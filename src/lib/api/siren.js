@@ -1,37 +1,35 @@
-import ky from "ky";
+import ky from 'ky';
 
-const apiKey = process.env.NEXT_PUBLIC_SIREN_API_KEY ?? "";
+const apiKey = process.env.NEXT_PUBLIC_SIREN_API_KEY ?? '';
 
 export const api = ky.create({
-  prefixUrl: "https://api.siren.co.il",
+  prefixUrl: 'https://api.siren.co.il',
   headers: {
-    ...(apiKey ? { "x-api-key": apiKey } : {}),
+    ...(apiKey ? { 'x-api-key': apiKey } : {}),
   },
   timeout: 15000,
 });
 
-/** Convert a yyyy-MM-dd date string to a full ISO datetime UTC string. */
 function toIsoDatetime(dateStr, endOfDay = false) {
   if (!dateStr) return undefined;
-  // Already a full ISO datetime — pass through
-  if (dateStr.includes("T")) return dateStr;
+  if (dateStr.includes('T')) return dateStr;
   return endOfDay ? `${dateStr}T23:59:59Z` : `${dateStr}T00:00:00Z`;
 }
 
 function cleanParams(obj) {
   const out = {};
   for (const [k, v] of Object.entries(obj)) {
-    if (v !== undefined && v !== null && v !== "") out[k] = String(v);
+    if (v !== undefined && v !== null && v !== '') out[k] = String(v);
   }
   return out;
 }
 
 export async function getSummary(
   { startDate, endDate, origin, include, topLimit, timelineGroup } = {},
-  _apiKey
+  _apiKey,
 ) {
   return api
-    .get("stats/summary", {
+    .get('stats/summary', {
       searchParams: cleanParams({
         startDate: toIsoDatetime(startDate, false),
         endDate: toIsoDatetime(endDate, true),
@@ -57,10 +55,10 @@ export async function getCities(
     order,
     include,
   } = {},
-  _apiKey
+  _apiKey,
 ) {
   return api
-    .get("stats/cities", {
+    .get('stats/cities', {
       searchParams: cleanParams({
         startDate: toIsoDatetime(startDate, false),
         endDate: toIsoDatetime(endDate, true),
@@ -92,10 +90,10 @@ export async function getHistory(
     order,
     include,
   } = {},
-  _apiKey
+  _apiKey,
 ) {
   return api
-    .get("stats/history", {
+    .get('stats/history', {
       searchParams: cleanParams({
         startDate: toIsoDatetime(startDate, false),
         endDate: toIsoDatetime(endDate, true),
@@ -119,17 +117,17 @@ export async function getDistribution(
     startDate,
     endDate,
     origin,
-    groupBy = "category",
+    groupBy = 'category',
     category,
     limit = 50,
     offset = 0,
     sort,
     order,
   } = {},
-  _apiKey
+  _apiKey,
 ) {
   return api
-    .get("stats/distribution", {
+    .get('stats/distribution', {
       searchParams: cleanParams({
         startDate: toIsoDatetime(startDate, false),
         endDate: toIsoDatetime(endDate, true),
